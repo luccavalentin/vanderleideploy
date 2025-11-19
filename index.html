@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="language" content="pt-BR" />
+    <meta name="locale" content="pt_BR" />
+    <title>Sistema de Gestão VANDE</title>
+    <meta name="description" content="Sistema completo de gestão financeira e patrimonial" />
+    <meta name="author" content="Sistema Vanderlei" />
+    
+    <!-- Favicon Personalizado -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.svg" />
+
+    <meta property="og:title" content="Sistema de Gestão VANDE" />
+    <meta property="og:description" content="Sistema completo de gestão financeira e patrimonial" />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1e3a8a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="VANDE" />
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    
+    <!-- iOS Safari -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="msapplication-TileColor" content="#1e3a8a" />
+    <meta name="msapplication-TileImage" content="/icons/icon-192x192.png" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+              console.log('Service Worker registrado com sucesso:', registration.scope);
+            })
+            .catch((error) => {
+              console.log('Falha ao registrar Service Worker:', error);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
