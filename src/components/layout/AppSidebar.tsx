@@ -111,8 +111,12 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
 
   // Handler para clicar no menu "Meu Financeiro"
   const handleFinanceiroClick = () => {
-    setIsFinanceiroOpen(true);
-    setIsFinanceiroClicked(true);
+    try {
+      setIsFinanceiroOpen(true);
+      setIsFinanceiroClicked(true);
+    } catch (error) {
+      console.error("Erro ao abrir menu financeiro:", error);
+    }
   };
 
   // Verifica se o menu deve ser destacado (ativo ou quando está aberto e foi clicado)

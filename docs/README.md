@@ -67,3 +67,4 @@ O sistema utiliza **Supabase** como banco de dados.
 - **Teste sempre em ambiente de desenvolvimento primeiro**
 - **Revise os scripts antes de executar**
 
+

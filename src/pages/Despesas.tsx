@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatsCard } from "@/components/layout/StatsCard";
@@ -26,11 +27,16 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 export default function Despesas() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Ler parâmetros da URL para filtros
+  const categoriaFilter = searchParams.get("categoria") || "";
+  const buscaFilter = searchParams.get("busca") || "";
 
   const [formData, setFormData] = useState({
     description: "",
@@ -59,8 +65,27 @@ export default function Despesas() {
     ["description", "category", "status"]
   );
 
+  // Aplicar filtros da URL ao termo de busca
+  useEffect(() => {
+    if (categoriaFilter || buscaFilter) {
+      const filterTerm = categoriaFilter ? categoriaFilter : buscaFilter;
+      setSearchTerm(filterTerm);
+    }
+  }, [categoriaFilter, buscaFilter, setSearchTerm]);
 
-  const { sortedData: sortedExpenses, SortButton } = useTableSort(filteredExpenses);
+  // Aplicar filtro adicional por categoria se especificado na URL
+  const finalFilteredExpenses = useMemo(() => {
+    if (!filteredExpenses) return [];
+    if (!categoriaFilter) return filteredExpenses;
+    
+    // Filtrar por categoria (case-insensitive)
+    return filteredExpenses.filter((expense: any) => {
+      const category = (expense.category || "").toLowerCase();
+      return category.includes(categoriaFilter.toLowerCase());
+    });
+  }, [filteredExpenses, categoriaFilter]);
+
+  const { sortedData: sortedExpenses, SortButton } = useTableSort(finalFilteredExpenses);
 
   // Calcular dados para o gráfico de pizza por categoria
   const expenseByCategory = useMemo(() => {

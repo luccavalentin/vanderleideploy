@@ -161,3 +161,4 @@ O banco de dados está configurado e pronto para deploy. Certifique-se de:
 3. Testar todas as funcionalidades
 4. Fazer backup antes de qualquer mudança
 
+

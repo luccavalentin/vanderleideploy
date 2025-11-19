@@ -137,32 +137,67 @@ export default function Tarefas() {
     recurrence_interval: 1,
   });
 
-  const { data: tasks } = useQuery({
+  const { data: tasks = [], isLoading: tasksLoading, error: tasksError } = useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("reminders")
-        .select("*");
-      if (error) throw error;
-      // Ordenar: vencidas primeiro, depois por data
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return data.sort((a: any, b: any) => {
-        const aStatus = a.status || (a.completed ? "concluida" : "pendente");
-        const bStatus = b.status || (b.completed ? "concluida" : "pendente");
-        const aDate = new Date(a.due_date);
-        aDate.setHours(0, 0, 0, 0);
-        const bDate = new Date(b.due_date);
-        bDate.setHours(0, 0, 0, 0);
-        const aOverdue = aDate < today && aStatus !== "concluida";
-        const bOverdue = bDate < today && bStatus !== "concluida";
-        // Tarefas vencidas primeiro
-        if (aOverdue && !bOverdue) return -1;
-        if (!aOverdue && bOverdue) return 1;
-        // Depois por data
-        return aDate.getTime() - bDate.getTime();
-      });
+      try {
+        const { data, error } = await supabase
+          .from("reminders")
+          .select("*");
+        
+        if (error) {
+          // Se a tabela não existe (404), retorna array vazio sem erro
+          const errorMessage = error.message || "";
+          const errorCode = (error as any).code || "";
+          
+          if (errorCode === "PGRST116" || 
+              errorMessage.includes("404") || 
+              errorMessage.includes("Not Found") ||
+              errorMessage.includes("Could not find the table") ||
+              errorMessage.includes("schema cache") ||
+              (errorMessage.includes("relation") && errorMessage.includes("does not exist"))) {
+            console.warn("Tabela 'reminders' não encontrada. Execute a migração necessária.");
+            return [];
+          }
+          throw error;
+        }
+        
+        if (!data || data.length === 0) {
+          return [];
+        }
+        
+        // Ordenar: vencidas primeiro, depois por data
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return data.sort((a: any, b: any) => {
+          const aStatus = a.status || (a.completed ? "concluida" : "pendente");
+          const bStatus = b.status || (b.completed ? "concluida" : "pendente");
+          const aDate = new Date(a.due_date);
+          aDate.setHours(0, 0, 0, 0);
+          const bDate = new Date(b.due_date);
+          bDate.setHours(0, 0, 0, 0);
+          const aOverdue = aDate < today && aStatus !== "concluida";
+          const bOverdue = bDate < today && bStatus !== "concluida";
+          // Tarefas vencidas primeiro
+          if (aOverdue && !bOverdue) return -1;
+          if (!aOverdue && bOverdue) return 1;
+          // Depois por data
+          return aDate.getTime() - bDate.getTime();
+        });
+      } catch (err: any) {
+        // Captura erros de rede ou outros erros
+        const errorMessage = err?.message || "";
+        if (errorMessage.includes("404") || 
+            errorMessage.includes("Not Found") ||
+            errorMessage.includes("Could not find the table") ||
+            errorMessage.includes("schema cache")) {
+          console.warn("Tabela 'reminders' não encontrada. Execute a migração necessária.");
+          return [];
+        }
+        throw err;
+      }
     },
+    retry: false,
   });
 
   // Definitions that depend on tasks

@@ -72,7 +72,7 @@ export default function Clientes() {
     email?: string;
   }>({});
 
-  const { data: clients } = useQuery({
+  const { data: clients, isLoading: clientsLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -80,8 +80,10 @@ export default function Clientes() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      return data || [];
     },
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredClients, resultCount, totalCount } = useSmartSearch(
@@ -588,7 +590,18 @@ const handleEdit = (client: any) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedClients?.length === 0 ? (
+            {clientsLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground/70 border-0">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
+                      <Users className="w-8 h-8 text-muted-foreground animate-pulse" />
+                    </div>
+                    <span className="font-medium">Carregando clientes...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : sortedClients?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-12 text-muted-foreground/70 border-0">
                   <div className="flex flex-col items-center gap-2">

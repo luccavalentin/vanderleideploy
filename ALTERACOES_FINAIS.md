@@ -147,3 +147,4 @@ backup2-main/
 - A logo PWA está corretamente configurada
 - O sistema está pronto para produção
 
+

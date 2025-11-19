@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { QuickActions } from "@/components/QuickActions";
@@ -19,7 +20,7 @@ import { useTableSort } from "@/hooks/useTableSort";
 import { useSmartSearch } from "@/hooks/useSmartSearch";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
 import { StateSearchInput } from "@/components/StateSearchInput";
-import { Pencil, Trash2, Download, Package, MapPin, DollarSign, Heart, FileText } from "lucide-react";
+import { Pencil, Trash2, Download, Package, MapPin, DollarSign, Heart, FileText, TrendingUp, TrendingDown } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
@@ -28,6 +29,7 @@ import { standardizeText, handleStandardizeInput, formatCurrencyInput, parseCurr
 import * as XLSX from "xlsx";
 
 export default function Gado() {
+  const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -51,15 +53,18 @@ export default function Gado() {
     purchase_date: "",
   });
 
-  const { data: cattle } = useQuery({
+  const { data: cattle, isLoading: cattleLoading } = useQuery({
     queryKey: ["cattle"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cattle")
-        .select("*");
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      return data || [];
     },
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredCattle, resultCount, totalCount } = useSmartSearch(
@@ -120,6 +125,7 @@ export default function Gado() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cattle"] });
+      await queryClient.refetchQueries({ queryKey: ["cattle"] });
       // toast({ title: "Gado cadastrado com sucesso!" });
       if (keepDialogOpen) {
         setFormData({
@@ -154,6 +160,7 @@ export default function Gado() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cattle"] });
+      await queryClient.refetchQueries({ queryKey: ["cattle"] });
       toast({ title: "Gado atualizado com sucesso!" });
       handleCloseDialog();
     },
@@ -387,6 +394,53 @@ export default function Gado() {
 
       <QuickActions />
 
+      {/* Botões de Custos e Receitas com Gado */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <Card className="border-2 border-destructive/30 hover:border-destructive/50 transition-colors cursor-pointer hover:shadow-lg">
+          <CardContent className="p-6">
+            <Button
+              variant="ghost"
+              className="w-full h-auto p-0 flex flex-col items-start gap-3 hover:bg-transparent"
+              onClick={() => navigate("/despesas?categoria=Gado&busca=gado")}
+            >
+              <div className="flex items-center gap-3 w-full">
+                <div className="p-3 rounded-lg bg-destructive/10">
+                  <TrendingDown className="h-6 w-6 text-destructive" />
+                </div>
+                <div className="flex-1 text-left">
+                  <h3 className="font-bold text-lg text-foreground">Custos com os Gados</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Visualize todas as despesas relacionadas ao gado
+                  </p>
+                </div>
+              </div>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-success/30 hover:border-success/50 transition-colors cursor-pointer hover:shadow-lg">
+          <CardContent className="p-6">
+            <Button
+              variant="ghost"
+              className="w-full h-auto p-0 flex flex-col items-start gap-3 hover:bg-transparent"
+              onClick={() => navigate("/receitas?categoria=Gado&busca=gado")}
+            >
+              <div className="flex items-center gap-3 w-full">
+                <div className="p-3 rounded-lg bg-success/10">
+                  <TrendingUp className="h-6 w-6 text-success" />
+                </div>
+                <div className="flex-1 text-left">
+                  <h3 className="font-bold text-lg text-foreground">Receitas com os Gados</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Visualize todas as receitas relacionadas ao gado
+                  </p>
+                </div>
+              </div>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatsCard
@@ -511,7 +565,18 @@ export default function Gado() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedCattle?.length === 0 ? (
+            {cattleLoading ? (
+              <TableRow>
+                <TableCell colSpan={10} className="text-center py-12 text-muted-foreground/70 border-0">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
+                      <span className="text-2xl animate-pulse">🐄</span>
+                    </div>
+                    <span className="font-medium">Carregando gado...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : sortedCattle?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={10} className="text-center py-12 text-muted-foreground/70 border-0">
                   <div className="flex flex-col items-center gap-2">
@@ -532,13 +597,54 @@ export default function Gado() {
                     setDetailsDialogOpen(true);
                   }}
                 >
-                  {/* ...existing code... */}
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[150px] truncate text-center">{item.description || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.category || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.origin || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.quantity || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.age_months || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.health_status || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] truncate text-center">{item.location || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</TableCell>
+                  <TableCell className="text-center border-r border-border/30 px-1.5 sm:px-2 text-xs w-16">
+                    <div className="flex gap-1 justify-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(item);
+                        }}
+                        aria-label="Editar gado"
+                        title="Editar gado"
+                        className="h-8 w-8"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(item.id);
+                        }}
+                        aria-label="Excluir gado"
+                        title="Excluir gado"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))
             }
           </TableBody>
-                {/* Dialog de detalhes do lote de gado - renderizado fora do Table/TableBody */}
-                <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        </Table>
+      </div>
+
+      {/* Dialog de detalhes do lote de gado - renderizado fora do Table */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
                       <DialogTitle>Detalhes do Lote</DialogTitle>
@@ -560,9 +666,7 @@ export default function Gado() {
                       );
                     })()}
                   </DialogContent>
-                </Dialog>
-        </Table>
-      </div>
+      </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
         if (!open) {

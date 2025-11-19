@@ -554,33 +554,6 @@ const calculateStats = (applications: any[]) => {
                     setDetailsDialogOpen(true);
                   }}
                 >
-                        {/* Dialog de detalhes da aplicação */}
-                        <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-                          <DialogContent className="max-w-md">
-                            <DialogHeader>
-                              <DialogTitle>Detalhes da Aplicação</DialogTitle>
-                            </DialogHeader>
-                            {selectedApplication && (
-                              (() => {
-                                const application = sortedApplications?.find((a) => a.id === selectedApplication);
-                                if (!application) return null;
-                                return (
-                                  <div className="space-y-2">
-                                    <div><b>Descrição:</b> {application.description}</div>
-                                    <div><b>Tipo:</b> {application.type}</div>
-                                    <div><b>Instituição:</b> {application.institution}</div>
-                                    <div><b>Data Aplicação:</b> {application.application_date ? format(new Date(application.application_date), "dd/MM/yyyy") : "-"}</div>
-                                    <div><b>Vencimento:</b> {application.maturity_date ? format(new Date(application.maturity_date), "dd/MM/yyyy") : "-"}</div>
-                                    <div><b>Taxa (%):</b> {application.interest_rate ? `${application.interest_rate}%` : "-"}</div>
-                                    <div><b>Status:</b> {application.status}</div>
-                                    <div><b>Valor:</b> {application.amount ? formatCurrency(application.amount) : "-"}</div>
-                                    <div><b>Notas:</b> {application.notes || "-"}</div>
-                                  </div>
-                                );
-                              })()
-                            )}
-                          </DialogContent>
-                        </Dialog>
                   <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] truncate text-center">{application.description}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{application.type || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[100px] truncate text-center">{application.institution || "-"}</TableCell>
@@ -635,6 +608,32 @@ const calculateStats = (applications: any[]) => {
           </TableBody>
         </Table>
       </div>
+
+      {/* Dialog de detalhes da aplicação - movido para fora do map */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalhes da Aplicação</DialogTitle>
+          </DialogHeader>
+          {selectedApplication && (() => {
+            const application = sortedApplications?.find((a) => a.id === selectedApplication);
+            if (!application) return <div className="text-muted-foreground">Aplicação não encontrada.</div>;
+            return (
+              <div className="space-y-2">
+                <div><b>Descrição:</b> {application.description}</div>
+                <div><b>Tipo:</b> {application.type || "-"}</div>
+                <div><b>Instituição:</b> {application.institution || "-"}</div>
+                <div><b>Data Aplicação:</b> {application.application_date ? format(new Date(application.application_date), "dd/MM/yyyy") : "-"}</div>
+                <div><b>Vencimento:</b> {application.maturity_date ? format(new Date(application.maturity_date), "dd/MM/yyyy") : "-"}</div>
+                <div><b>Taxa (%):</b> {application.interest_rate ? `${application.interest_rate}%` : "-"}</div>
+                <div><b>Status:</b> {application.status || "-"}</div>
+                <div><b>Valor:</b> {application.amount ? formatCurrency(application.amount) : "-"}</div>
+                <div><b>Notas:</b> {application.notes || "-"}</div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
         if (!open) {

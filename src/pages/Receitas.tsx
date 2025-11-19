@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatsCard } from "@/components/layout/StatsCard";
@@ -26,6 +27,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 export default function Receitas() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isReuseDialogOpen, setIsReuseDialogOpen] = useState(false);
   const [reuseSearchTerm, setReuseSearchTerm] = useState("");
@@ -33,6 +35,10 @@ export default function Receitas() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Ler parâmetros da URL para filtros
+  const categoriaFilter = searchParams.get("categoria") || "";
+  const buscaFilter = searchParams.get("busca") || "";
 
   const [formData, setFormData] = useState({
     description: "",
@@ -62,6 +68,26 @@ export default function Receitas() {
     ["description", "category", "classification"]
   );
 
+  // Aplicar filtros da URL ao termo de busca
+  useEffect(() => {
+    if (categoriaFilter || buscaFilter) {
+      const filterTerm = categoriaFilter ? categoriaFilter : buscaFilter;
+      setSearchTerm(filterTerm);
+    }
+  }, [categoriaFilter, buscaFilter, setSearchTerm]);
+
+  // Aplicar filtro adicional por categoria se especificado na URL
+  const finalFilteredRevenues = useMemo(() => {
+    if (!filteredRevenues) return [];
+    if (!categoriaFilter) return filteredRevenues;
+    
+    // Filtrar por categoria (case-insensitive)
+    return filteredRevenues.filter((revenue: any) => {
+      const category = (revenue.category || "").toLowerCase();
+      return category.includes(categoriaFilter.toLowerCase());
+    });
+  }, [filteredRevenues, categoriaFilter]);
+
   // Busca para reutilizar receitas
   const { filteredData: filteredReuseRevenues } = useSmartSearch(
     revenues,
@@ -69,7 +95,7 @@ export default function Receitas() {
     reuseSearchTerm
   );
 
-  const { sortedData: sortedRevenues, SortButton } = useTableSort(filteredRevenues);
+  const { sortedData: sortedRevenues, SortButton } = useTableSort(finalFilteredRevenues);
 
   // Calcular dados para o gráfico de pizza por classificação
   const revenueByClassification = useMemo(() => {

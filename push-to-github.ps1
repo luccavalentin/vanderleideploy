@@ -50,3 +50,4 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "❌ Erro ao fazer push. Verifique as mensagens acima." -ForegroundColor Red
 }
 
+

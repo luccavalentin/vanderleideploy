@@ -139,3 +139,4 @@ console.log('   1. Leia o arquivo GERAR_ICONES_INSTRUCOES.md');
 console.log('   2. Gere os ícones usando uma das opções');
 console.log('   3. Verifique se os arquivos foram criados em public/icons/');
 
+

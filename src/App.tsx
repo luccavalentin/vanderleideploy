@@ -26,7 +26,51 @@ import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error: any) => {
+        // Não retry em erros 404 ou de tabela não encontrada
+        const errorMessage = error?.message || "";
+        const errorCode = error?.code || "";
+        
+        if (errorCode === "PGRST116" || 
+            errorCode === "NOT_FOUND" ||
+            errorMessage.includes("404") || 
+            errorMessage.includes("Not Found") ||
+            errorMessage.includes("NOT_FOUND") ||
+            errorMessage.includes("Could not find the table") ||
+            errorMessage.includes("schema cache") ||
+            (errorMessage.includes("relation") && errorMessage.includes("does not exist"))) {
+          return false;
+        }
+        // Retry até 2 vezes para outros erros
+        return failureCount < 2;
+      },
+      retryDelay: 1000,
+      staleTime: 30000, // Cache por 30 segundos
+      refetchOnWindowFocus: false, // Não refetch ao focar na janela
+      onError: (error: any) => {
+        // Silencia erros 404 no console para não poluir
+        const errorMessage = error?.message || "";
+        const errorCode = error?.code || "";
+        
+        if (errorCode === "PGRST116" || 
+            errorCode === "NOT_FOUND" ||
+            errorMessage.includes("404") || 
+            errorMessage.includes("Not Found") ||
+            errorMessage.includes("NOT_FOUND") ||
+            errorMessage.includes("Could not find the table") ||
+            (errorMessage.includes("relation") && errorMessage.includes("does not exist"))) {
+          // Erro silenciado - tabela não existe, será tratado individualmente
+          return;
+        }
+        // Outros erros podem ser logados normalmente
+        console.error("Query error:", error);
+      },
+    },
+  },
+});
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>

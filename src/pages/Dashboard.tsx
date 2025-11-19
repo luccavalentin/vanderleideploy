@@ -1524,172 +1524,268 @@ export default function Dashboard() {
     },
   });
 
-  // Receitas por categoria
+  // Receitas por categoria - REFEITO COMPLETAMENTE
   const { data: revenueByCategory } = useQuery({
     queryKey: ["revenue-by-category", periodFilter, selectedMonth, selectedYear, customDateRange],
     queryFn: async () => {
-      const { startDate, endDate } = getDateRange();
-      // Buscar todas as receitas que podem ter parcelas dentro do período
-      const { data, error } = await supabase
-        .from("revenue")
-        .select("amount, category, date, frequency, installments");
-      if (error) throw error;
-      
-      const byCategory = data.reduce((acc: any, item: any) => {
-        const category = item.category || "Sem categoria";
-        if (!acc[category]) acc[category] = 0;
-        // Calcular apenas parcelas dentro do período
-        const frequency = item.frequency || "Única";
-        const installmentsCount = item.installments || null;
-        const itemDate = new Date(item.date);
-        const amount = Number(item.amount || 0);
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        let periodTotal = 0;
-
-        if (frequency === "Única" || (!frequency.includes("Mensal") && !frequency.includes("Anual"))) {
-          if (itemDate >= start && itemDate <= end) {
-            periodTotal = amount;
-          }
-        } else if (frequency.includes("Mensal")) {
-          if (frequency.includes("Fixo")) {
-            // Mensal Fixo - contar apenas meses dentro do período
-            let currentMonth = new Date(Math.max(start.getTime(), itemDate.getTime()));
-            currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-            const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
-            while (currentMonth <= endMonth) {
-              const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-              const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-              if (monthStart <= end && monthEnd >= start) {
-                periodTotal += amount;
-              }
-              currentMonth.setMonth(currentMonth.getMonth() + 1);
-            }
-          } else if (frequency.includes("Tempo Determinado") && installmentsCount) {
-            for (let i = 0; i < installmentsCount; i++) {
-              const installmentDate = new Date(itemDate);
-              installmentDate.setMonth(installmentDate.getMonth() + i);
-              const installmentDateStr = installmentDate.toISOString().split('T')[0];
-              if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
-                periodTotal += amount;
-              }
-            }
-          }
-        } else if (frequency.includes("Anual")) {
-          if (frequency.includes("Fixo")) {
-            const startYear = Math.max(start.getFullYear(), itemDate.getFullYear());
-            const endYear = end.getFullYear();
-            for (let year = startYear; year <= endYear; year++) {
-              const installmentDate = new Date(year, itemDate.getMonth(), itemDate.getDate());
-              const installmentDateStr = installmentDate.toISOString().split('T')[0];
-              if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
-                periodTotal += amount;
-              }
-            }
-          } else if (frequency.includes("Tempo Determinado") && installmentsCount) {
-            for (let i = 0; i < installmentsCount; i++) {
-              const installmentDate = new Date(itemDate);
-              installmentDate.setFullYear(installmentDate.getFullYear() + i);
-              const installmentDateStr = installmentDate.toISOString().split('T')[0];
-              if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
-                periodTotal += amount;
-              }
-            }
-          }
+      try {
+        const { startDate, endDate } = getDateRange();
+        
+        // Buscar todas as receitas
+        const { data, error } = await supabase
+          .from("revenue")
+          .select("amount, category, date, frequency, installments");
+        
+        if (error) {
+          console.error("Erro ao buscar receitas:", error);
+          throw error;
         }
-        acc[category] += periodTotal;
-        return acc;
-      }, {});
-      
-      return Object.entries(byCategory).map(([category, amount]) => ({
-        category,
-        amount: Number(amount)
-      })).sort((a, b) => b.amount - a.amount);
+        
+        if (!data || data.length === 0) {
+          return [];
+        }
+        
+        const byCategory: Record<string, number> = {};
+        
+        // Processar cada receita
+        data.forEach((item: any) => {
+          const category = (item.category && item.category.trim()) || "Sem categoria";
+          const frequency = (item.frequency || "Única").toString();
+          const installmentsCount = item.installments ? parseInt(item.installments.toString()) : null;
+          const itemDate = new Date(item.date);
+          const amount = Number(item.amount || 0);
+          
+          // Validar data
+          if (isNaN(itemDate.getTime()) || amount <= 0) {
+            return;
+          }
+          
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          let periodTotal = 0;
+          
+          // Normalizar frequency
+          const frequencyUpper = frequency.toUpperCase();
+          const isMensal = frequencyUpper.includes("MENSAL");
+          const isAnual = frequencyUpper.includes("ANUAL");
+          const isFixo = frequencyUpper.includes("FIXO");
+          const isTempoDeterminado = frequencyUpper.includes("TEMPO DETERMINADO") || frequencyUpper.includes("TEMPO_DETERMINADO");
+          
+          // Receita única
+          if (frequency === "Única" || (!isMensal && !isAnual)) {
+            if (itemDate >= start && itemDate <= end) {
+              periodTotal = amount;
+            }
+          } 
+          // Receita mensal
+          else if (isMensal) {
+            if (isFixo) {
+              // Mensal Fixo - contar meses dentro do período
+              let currentMonth = new Date(Math.max(start.getTime(), itemDate.getTime()));
+              currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+              const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+              
+              while (currentMonth <= endMonth) {
+                const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+                if (monthStart <= end && monthEnd >= start) {
+                  periodTotal += amount;
+                }
+                currentMonth.setMonth(currentMonth.getMonth() + 1);
+              }
+            } else if (isTempoDeterminado && installmentsCount && installmentsCount > 0) {
+              // Mensal por Tempo Determinado
+              for (let i = 0; i < installmentsCount; i++) {
+                const installmentDate = new Date(itemDate.getFullYear(), itemDate.getMonth() + i, itemDate.getDate());
+                const installmentDateStr = installmentDate.toISOString().split('T')[0];
+                if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
+                  periodTotal += amount;
+                }
+              }
+            }
+          } 
+          // Receita anual
+          else if (isAnual) {
+            if (isFixo) {
+              // Anual Fixo
+              const startYear = Math.max(start.getFullYear(), itemDate.getFullYear());
+              const endYear = end.getFullYear();
+              for (let year = startYear; year <= endYear; year++) {
+                const installmentDate = new Date(year, itemDate.getMonth(), itemDate.getDate());
+                const installmentDateStr = installmentDate.toISOString().split('T')[0];
+                if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
+                  periodTotal += amount;
+                }
+              }
+            } else if (isTempoDeterminado && installmentsCount && installmentsCount > 0) {
+              // Anual por Tempo Determinado
+              for (let i = 0; i < installmentsCount; i++) {
+                const installmentDate = new Date(itemDate);
+                installmentDate.setFullYear(installmentDate.getFullYear() + i);
+                const installmentDateStr = installmentDate.toISOString().split('T')[0];
+                if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
+                  periodTotal += amount;
+                }
+              }
+            }
+          }
+          
+          // Adicionar ao total da categoria
+          if (periodTotal > 0) {
+            if (!byCategory[category]) {
+              byCategory[category] = 0;
+            }
+            byCategory[category] += periodTotal;
+          }
+        });
+        
+        // Converter para array e ordenar
+        return Object.entries(byCategory)
+          .map(([category, amount]) => ({
+            category: category.trim(),
+            amount: Number(amount)
+          }))
+          .filter(item => item.amount > 0)
+          .sort((a, b) => b.amount - a.amount);
+      } catch (err: any) {
+        console.error("Erro na query de receitas por categoria:", err);
+        return [];
+      }
     },
+    retry: 2,
+    retryDelay: 1000,
   });
 
-  // Despesas por categoria
+  // Despesas por categoria - REFEITO COMPLETAMENTE (mesma lógica de receitas)
   const { data: expensesByCategory } = useQuery({
     queryKey: ["expenses-by-category", periodFilter, selectedMonth, selectedYear, customDateRange],
     queryFn: async () => {
-      const { startDate, endDate } = getDateRange();
-      // Buscar todas as despesas que podem ter parcelas dentro do período
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("amount, category, date, frequency, installments");
-      if (error) throw error;
-      
-      const byCategory = data.reduce((acc: any, item: any) => {
-        const category = item.category || "Sem categoria";
-        if (!acc[category]) acc[category] = 0;
-        // Calcular apenas parcelas dentro do período
-        const frequency = item.frequency || "Única";
-        const installmentsCount = item.installments || null;
-        const itemDate = new Date(item.date);
-        const amount = Number(item.amount || 0);
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        let periodTotal = 0;
-
-        if (frequency === "Única" || (!frequency.includes("Mensal") && !frequency.includes("Anual"))) {
-          if (itemDate >= start && itemDate <= end) {
-            periodTotal = amount;
-          }
-        } else if (frequency.includes("Mensal")) {
-          if (frequency.includes("Fixo")) {
-            // Mensal Fixo - contar apenas meses dentro do período
-            let currentMonth = new Date(Math.max(start.getTime(), itemDate.getTime()));
-            currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-            const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
-            while (currentMonth <= endMonth) {
-              const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-              const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-              if (monthStart <= end && monthEnd >= start) {
-                periodTotal += amount;
-              }
-              currentMonth.setMonth(currentMonth.getMonth() + 1);
-            }
-          } else if (frequency.includes("Tempo Determinado") && installmentsCount) {
-            for (let i = 0; i < installmentsCount; i++) {
-              const installmentDate = new Date(itemDate);
-              installmentDate.setMonth(installmentDate.getMonth() + i);
-              const installmentDateStr = installmentDate.toISOString().split('T')[0];
-              if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
-                periodTotal += amount;
-              }
-            }
-          }
-        } else if (frequency.includes("Anual")) {
-          if (frequency.includes("Fixo")) {
-            const startYear = Math.max(start.getFullYear(), itemDate.getFullYear());
-            const endYear = end.getFullYear();
-            for (let year = startYear; year <= endYear; year++) {
-              const installmentDate = new Date(year, itemDate.getMonth(), itemDate.getDate());
-              const installmentDateStr = installmentDate.toISOString().split('T')[0];
-              if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
-                periodTotal += amount;
-              }
-            }
-          } else if (frequency.includes("Tempo Determinado") && installmentsCount) {
-            for (let i = 0; i < installmentsCount; i++) {
-              const installmentDate = new Date(itemDate);
-              installmentDate.setFullYear(installmentDate.getFullYear() + i);
-              const installmentDateStr = installmentDate.toISOString().split('T')[0];
-              if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
-                periodTotal += amount;
-              }
-            }
-          }
+      try {
+        const { startDate, endDate } = getDateRange();
+        
+        // Buscar todas as despesas
+        const { data, error } = await supabase
+          .from("expenses")
+          .select("amount, category, date, frequency, installments");
+        
+        if (error) {
+          console.error("Erro ao buscar despesas:", error);
+          throw error;
         }
-        acc[category] += periodTotal;
-        return acc;
-      }, {});
-      
-      return Object.entries(byCategory).map(([category, amount]) => ({
-        category,
-        amount: Number(amount)
-      })).sort((a, b) => b.amount - a.amount);
+        
+        if (!data || data.length === 0) {
+          return [];
+        }
+        
+        const byCategory: Record<string, number> = {};
+        
+        // Processar cada despesa
+        data.forEach((item: any) => {
+          const category = (item.category && item.category.trim()) || "Sem categoria";
+          const frequency = (item.frequency || "Única").toString();
+          const installmentsCount = item.installments ? parseInt(item.installments.toString()) : null;
+          const itemDate = new Date(item.date);
+          const amount = Number(item.amount || 0);
+          
+          // Validar data
+          if (isNaN(itemDate.getTime()) || amount <= 0) {
+            return;
+          }
+          
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          let periodTotal = 0;
+          
+          // Normalizar frequency
+          const frequencyUpper = frequency.toUpperCase();
+          const isMensal = frequencyUpper.includes("MENSAL");
+          const isAnual = frequencyUpper.includes("ANUAL");
+          const isFixo = frequencyUpper.includes("FIXO");
+          const isTempoDeterminado = frequencyUpper.includes("TEMPO DETERMINADO") || frequencyUpper.includes("TEMPO_DETERMINADO");
+          
+          // Despesa única
+          if (frequency === "Única" || (!isMensal && !isAnual)) {
+            if (itemDate >= start && itemDate <= end) {
+              periodTotal = amount;
+            }
+          } 
+          // Despesa mensal
+          else if (isMensal) {
+            if (isFixo) {
+              // Mensal Fixo - contar meses dentro do período
+              let currentMonth = new Date(Math.max(start.getTime(), itemDate.getTime()));
+              currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+              const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+              
+              while (currentMonth <= endMonth) {
+                const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+                if (monthStart <= end && monthEnd >= start) {
+                  periodTotal += amount;
+                }
+                currentMonth.setMonth(currentMonth.getMonth() + 1);
+              }
+            } else if (isTempoDeterminado && installmentsCount && installmentsCount > 0) {
+              // Mensal por Tempo Determinado
+              for (let i = 0; i < installmentsCount; i++) {
+                const installmentDate = new Date(itemDate.getFullYear(), itemDate.getMonth() + i, itemDate.getDate());
+                const installmentDateStr = installmentDate.toISOString().split('T')[0];
+                if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
+                  periodTotal += amount;
+                }
+              }
+            }
+          } 
+          // Despesa anual
+          else if (isAnual) {
+            if (isFixo) {
+              // Anual Fixo
+              const startYear = Math.max(start.getFullYear(), itemDate.getFullYear());
+              const endYear = end.getFullYear();
+              for (let year = startYear; year <= endYear; year++) {
+                const installmentDate = new Date(year, itemDate.getMonth(), itemDate.getDate());
+                const installmentDateStr = installmentDate.toISOString().split('T')[0];
+                if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
+                  periodTotal += amount;
+                }
+              }
+            } else if (isTempoDeterminado && installmentsCount && installmentsCount > 0) {
+              // Anual por Tempo Determinado
+              for (let i = 0; i < installmentsCount; i++) {
+                const installmentDate = new Date(itemDate);
+                installmentDate.setFullYear(installmentDate.getFullYear() + i);
+                const installmentDateStr = installmentDate.toISOString().split('T')[0];
+                if (installmentDateStr >= startDate && installmentDateStr <= endDate) {
+                  periodTotal += amount;
+                }
+              }
+            }
+          }
+          
+          // Adicionar ao total da categoria
+          if (periodTotal > 0) {
+            if (!byCategory[category]) {
+              byCategory[category] = 0;
+            }
+            byCategory[category] += periodTotal;
+          }
+        });
+        
+        // Converter para array e ordenar
+        return Object.entries(byCategory)
+          .map(([category, amount]) => ({
+            category: category.trim(),
+            amount: Number(amount)
+          }))
+          .filter(item => item.amount > 0)
+          .sort((a, b) => b.amount - a.amount);
+      } catch (err: any) {
+        console.error("Erro na query de despesas por categoria:", err);
+        return [];
+      }
     },
+    retry: 2,
+    retryDelay: 1000,
   });
 
   // Dados para análise mensal detalhada (Receitas e Despesas por mês)

@@ -12,22 +12,35 @@ if (typeof document !== "undefined") {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("/service-worker.js")
+      .register("/service-worker.js", { updateViaCache: "none" })
       .then((registration) => {
         console.log("✅ Service Worker registrado com sucesso:", registration.scope);
+        
+        // Força atualização imediata
+        registration.update();
         
         // Verifica atualizações do service worker
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener("statechange", () => {
-              if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-                console.log("🔄 Nova versão do Service Worker disponível!");
-                // Opcional: mostrar notificação para o usuário atualizar
+              if (newWorker.state === "installed") {
+                if (navigator.serviceWorker.controller) {
+                  console.log("🔄 Nova versão do Service Worker disponível!");
+                  // Força reload para usar nova versão
+                  window.location.reload();
+                } else {
+                  console.log("✅ Service Worker instalado pela primeira vez");
+                }
               }
             });
           }
         });
+        
+        // Verifica atualizações periodicamente
+        setInterval(() => {
+          registration.update();
+        }, 60000); // A cada 1 minuto
       })
       .catch((error) => {
         console.error("❌ Falha ao registrar Service Worker:", error);

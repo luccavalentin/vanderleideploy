@@ -241,3 +241,4 @@ Após gerar os ícones:
 - Logout limpa completamente a sessão
 - Botão voltar usa `navigate(-1)` ou vai para dashboard
 
+

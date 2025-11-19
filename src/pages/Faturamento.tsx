@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -15,49 +15,122 @@ export default function Faturamento() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const MONTHS_PER_PAGE = isMobile ? 3 : 10; // Mobile: 3 meses, Desktop: 10
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  
   // Buscar todas as receitas cadastradas
-  const { data: consolidatedRevenues } = useQuery({
+  const { data: consolidatedRevenues = [], isLoading: revenuesLoading, error: revenuesError, refetch: refetchRevenues } = useQuery({
     queryKey: ["consolidated-revenues"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("revenue")
-        .select("id, date, description, category, classification, amount, status, frequency, installments, documentation_status, client_id, property_id, created_at, updated_at")
-        .order("date", { ascending: true });
-      if (error) throw error;
-      
-      return data || [];
+      try {
+        const { data, error } = await supabase
+          .from("revenue")
+          .select("id, date, description, category, classification, amount, status, frequency, installments, documentation_status, client_id, property_id, created_at, updated_at")
+          .order("date", { ascending: true });
+        
+        if (error) {
+          console.error("Erro ao buscar receitas:", error);
+          // Se for erro 404, retorna array vazio
+          if (error.code === "PGRST116" || error.message?.includes("404") || error.message?.includes("Not Found")) {
+            return [];
+          }
+          throw error;
+        }
+        
+        return data || [];
+      } catch (err: any) {
+        console.error("Erro na query de receitas:", err);
+        // Retornar array vazio em caso de erro para não quebrar a tela
+        if (err?.message?.includes("404") || err?.code === "PGRST116" || err?.message?.includes("Not Found")) {
+          return [];
+        }
+        throw err;
+      }
     },
+    retry: (failureCount, error: any) => {
+      // Não retry em erros 404
+      if (error?.code === "PGRST116" || error?.message?.includes("404") || error?.message?.includes("Not Found")) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: 1000,
+    staleTime: 0, // Sempre buscar dados frescos
+    refetchOnMount: true, // Sempre refetch ao montar
+    refetchOnWindowFocus: false, // Não refetch ao focar na janela
+    refetchOnReconnect: true, // Refetch ao reconectar
   });
+
+  // Garantir que os dados sejam atualizados ao montar o componente
+  useEffect(() => {
+    // Força refetch ao montar para garantir dados atualizados
+    const timer = setTimeout(() => {
+      refetchRevenues();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [refetchRevenues]);
 
   // Gerar todos os meses disponíveis, cobrindo do menor ao maior mês das receitas
   const allMonths = useMemo(() => {
+    // Se não há receitas ou ainda está carregando, retornar apenas o mês atual
+    if (!consolidatedRevenues || consolidatedRevenues.length === 0) {
+      const today = new Date();
+      const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      return [{
+        key: format(currentMonth, "yyyy-MM"),
+        label: format(currentMonth, "MMM/yyyy", { locale: ptBR }).toUpperCase(),
+        fullDate: currentMonth,
+      }];
+    }
+
     let minDate = new Date();
     let maxDate = new Date();
-    if (consolidatedRevenues && consolidatedRevenues.length > 0) {
-      consolidatedRevenues.forEach((revenue: any) => {
-        let d = typeof revenue.date === 'string' ? new Date(revenue.date) : revenue.date;
-        if (d instanceof Date && !isNaN(d.getTime())) {
-          if (d < minDate) minDate = new Date(d.getFullYear(), d.getMonth(), 1);
-          if (d > maxDate) maxDate = new Date(d.getFullYear(), d.getMonth(), 1);
-          // Considerar parcelas futuras
-          if (revenue.frequency && revenue.frequency.toString().toUpperCase() !== 'ÚNICA') {
-            const installmentsCount = revenue.installments ? parseInt(revenue.installments.toString()) : null;
-            if (installmentsCount && installmentsCount > 1) {
-              if (revenue.frequency.toString().toUpperCase().includes('MENSAL')) {
-                const futureMonth = new Date(d.getFullYear(), d.getMonth() + installmentsCount - 1, 1);
-                if (futureMonth > maxDate) maxDate = futureMonth;
-              } else if (revenue.frequency.toString().toUpperCase().includes('ANUAL')) {
-                const futureYear = new Date(d.getFullYear() + installmentsCount - 1, d.getMonth(), 1);
-                if (futureYear > maxDate) maxDate = futureYear;
-              }
+    let hasValidDate = false;
+
+    consolidatedRevenues.forEach((revenue: any) => {
+      let d = typeof revenue.date === 'string' ? new Date(revenue.date) : revenue.date;
+      if (d instanceof Date && !isNaN(d.getTime())) {
+        if (!hasValidDate) {
+          minDate = new Date(d.getFullYear(), d.getMonth(), 1);
+          maxDate = new Date(d.getFullYear(), d.getMonth(), 1);
+          hasValidDate = true;
+        } else {
+          const revenueMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+          if (revenueMonth < minDate) minDate = revenueMonth;
+          if (revenueMonth > maxDate) maxDate = revenueMonth;
+        }
+        
+        // Considerar parcelas futuras
+        if (revenue.frequency && revenue.frequency.toString().toUpperCase() !== 'ÚNICA') {
+          const installmentsCount = revenue.installments ? parseInt(revenue.installments.toString()) : null;
+          if (installmentsCount && installmentsCount > 1) {
+            if (revenue.frequency.toString().toUpperCase().includes('MENSAL')) {
+              const futureMonth = new Date(d.getFullYear(), d.getMonth() + installmentsCount - 1, 1);
+              if (futureMonth > maxDate) maxDate = futureMonth;
+            } else if (revenue.frequency.toString().toUpperCase().includes('ANUAL')) {
+              const futureYear = new Date(d.getFullYear() + installmentsCount - 1, d.getMonth(), 1);
+              if (futureYear > maxDate) maxDate = futureYear;
             }
           }
         }
-      });
+      }
+    });
+
+    // Se não encontrou nenhuma data válida, usar o mês atual
+    if (!hasValidDate) {
+      const today = new Date();
+      const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      return [{
+        key: format(currentMonth, "yyyy-MM"),
+        label: format(currentMonth, "MMM/yyyy", { locale: ptBR }).toUpperCase(),
+        fullDate: currentMonth,
+      }];
     }
+
     // Garantir que o mês atual está incluído
     const today = new Date();
-    if (today > maxDate) maxDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    if (currentMonth < minDate) minDate = currentMonth;
+    if (currentMonth > maxDate) maxDate = currentMonth;
+
     // Gerar lista de meses entre minDate e maxDate
     const monthsList = [];
     let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
@@ -127,7 +200,7 @@ export default function Faturamento() {
   };
 
   // Função para gerar parcelas futuras baseadas na periodicidade
-  const generateInstallments = (revenue: any, months: any[]) => {
+  const generateInstallments = (revenue: any, allMonthsList: any[]) => {
     // Usar Map para evitar duplicatas de monthKey
     const installmentsMap = new Map<string, number>();
     const frequency = (revenue.frequency || "Única").toString();
@@ -160,12 +233,12 @@ export default function Faturamento() {
     const isTempoDeterminado = frequencyUpper.includes("TEMPO DETERMINADO") || frequencyUpper.includes("TEMPO_DETERMINADO");
     const isFixo = frequencyUpper.includes("FIXO") && !isTempoDeterminado;
 
-    // Criar um mapa dos meses disponíveis para busca rápida
-    const monthsMap = new Map(months.map(m => [m.key, m]));
+    // Criar um mapa dos meses disponíveis para busca rápida (usar allMonthsList)
+    const monthsMap = new Map(allMonthsList.map(m => [m.key, m]));
     
     // Obter o primeiro e último mês disponível para limites
-    const firstMonth = months[0]?.fullDate;
-    const lastMonth = months[months.length - 1]?.fullDate;
+    const firstMonth = allMonthsList[0]?.fullDate;
+    const lastMonth = allMonthsList[allMonthsList.length - 1]?.fullDate;
     if (!firstMonth || !lastMonth) return [];
 
     // Receita única - apenas no mês da data
@@ -272,7 +345,10 @@ export default function Faturamento() {
 
   // Processar receitas consolidadas agrupadas por categoria e mês
   const billingData = useMemo(() => {
-    if (!consolidatedRevenues) return [];
+    // Se ainda está carregando ou não há receitas, retornar array vazio
+    if (revenuesLoading || !consolidatedRevenues || consolidatedRevenues.length === 0) {
+      return [];
+    }
 
     // Agrupar receitas por categoria
     const byCategory: Record<string, Record<string, number>> = {};
@@ -280,8 +356,8 @@ export default function Faturamento() {
     consolidatedRevenues.forEach((revenue: any) => {
       const category = revenue.category || "Sem Categoria";
       
-      // Gerar todas as parcelas para esta receita
-      const installments = generateInstallments(revenue, months);
+      // Gerar todas as parcelas para esta receita usando allMonths (não months)
+      const installments = generateInstallments(revenue, allMonths);
       
       installments.forEach(({ monthKey, amount }) => {
         if (!byCategory[category]) {
@@ -305,7 +381,7 @@ export default function Faturamento() {
         total,
       };
     });
-  }, [consolidatedRevenues, allMonths, months]);
+  }, [consolidatedRevenues, allMonths, revenuesLoading]);
 
   // Calcular totais por mês (apenas para os meses da página atual)
   const monthlyTotals = useMemo(() => {
@@ -395,13 +471,29 @@ export default function Faturamento() {
       {/* Mobile: Cards verticais | Desktop: Tabela */}
       {isMobile ? (
         <div className="space-y-4">
-          {billingData.length === 0 ? (
+          {revenuesLoading ? (
+            <Card className="p-8 text-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
+                  <span className="text-2xl animate-pulse">📊</span>
+                </div>
+                <span className="font-medium text-muted-foreground">Carregando faturamento...</span>
+              </div>
+            </Card>
+          ) : billingData.length === 0 && !revenuesLoading ? (
             <Card className="p-8 text-center">
               <div className="flex flex-col items-center gap-2">
                 <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
                   <span className="text-2xl">📊</span>
                 </div>
-                <span className="font-medium text-muted-foreground">Nenhuma receita cadastrada encontrada</span>
+                <span className="font-medium text-muted-foreground">
+                  {revenuesError ? "Erro ao carregar receitas. Tente novamente." : "Nenhuma receita cadastrada encontrada"}
+                </span>
+                {revenuesError && (
+                  <Button onClick={() => refetchRevenues()} variant="outline" size="sm" className="mt-2">
+                    Tentar novamente
+                  </Button>
+                )}
               </div>
             </Card>
           ) : (
@@ -495,14 +587,32 @@ export default function Faturamento() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {billingData.length === 0 ? (
+              {revenuesLoading ? (
+                <TableRow>
+                  <TableCell colSpan={months.length + 2} className="text-center py-12 text-muted-foreground/70 text-xs sm:text-sm border-0">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
+                        <span className="text-2xl animate-pulse">📊</span>
+                      </div>
+                      <span className="font-medium">Carregando faturamento...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : billingData.length === 0 && !revenuesLoading ? (
                 <TableRow>
                   <TableCell colSpan={months.length + 2} className="text-center py-12 text-muted-foreground/70 text-xs sm:text-sm border-0">
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
                         <span className="text-2xl">📊</span>
                       </div>
-                      <span className="font-medium">Nenhuma receita cadastrada encontrada</span>
+                      <span className="font-medium">
+                        {revenuesError ? "Erro ao carregar receitas. Tente novamente." : "Nenhuma receita cadastrada encontrada"}
+                      </span>
+                      {revenuesError && (
+                        <Button onClick={() => refetchRevenues()} variant="outline" size="sm" className="mt-2">
+                          Tentar novamente
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

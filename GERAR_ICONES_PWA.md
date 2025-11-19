@@ -92,3 +92,4 @@ public/icons/gerar-icones.html
 
 Clique nos botões de download e salve os arquivos na pasta `public/icons/` com os nomes corretos!
 
+

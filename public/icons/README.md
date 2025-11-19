@@ -32,3 +32,4 @@ node scripts/generate-icons.js
 - Fundo: Transparente ou cor primária (#1e3a8a)
 - Qualidade: Alta resolução
 
+
