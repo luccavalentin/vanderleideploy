@@ -390,7 +390,7 @@ export default function Tarefas() {
   };
 
   // Busca inteligente com suporte a "atraso"
-  const [searchTerm, setSearchTerm] = useState("");
+  // searchTerm já está declarado acima na linha 126
   
   const searchedTasks = useMemo(() => {
     if (!filteredTasks || !searchTerm.trim()) return filteredTasks;
