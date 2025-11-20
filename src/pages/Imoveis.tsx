@@ -928,13 +928,26 @@ export default function Imoveis() {
                 : "Preencha os dados do novo imóvel abaixo."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6" onKeyDown={(e) => {
+            // Previne mudanças de foco indesejadas ao pressionar Enter
+            if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.type !== 'submit') {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const inputs = Array.from(form.querySelectorAll('input, select, textarea')) as HTMLElement[];
+              const currentIndex = inputs.indexOf(e.target);
+              const nextInput = inputs[currentIndex + 1];
+              if (nextInput) {
+                nextInput.focus();
+              }
+            }
+          }}>
             <div className="grid grid-cols-3 gap-6">
               <div className="space-y-3">
                 <Label htmlFor="cep">CEP</Label>
                 <div className="relative">
                   <Input
                     id="cep"
+                    tabIndex={1}
                     value={formData.cep}
                     onChange={(e) => handleCEPChange(e.target.value)}
                     placeholder="00000-000"
@@ -962,15 +975,21 @@ export default function Imoveis() {
                 <Label htmlFor="address">Endereço</Label>
                 <Input
                   id="address"
+                  tabIndex={2}
                   value={formData.address}
                   onChange={(e) =>
                     setFormData({ ...formData, address: e.target.value })
                   }
-                  onBlur={(e) =>
-                    handleStandardizeInput(e.target.value, (value) =>
-                      setFormData({ ...formData, address: value })
-                    )
-                  }
+                  onBlur={(e) => {
+                    // Usa setTimeout para evitar mudanças de foco durante o blur
+                    setTimeout(() => {
+                      handleStandardizeInput(e.target.value, (value) => {
+                        if (value !== formData.address) {
+                          setFormData({ ...formData, address: value });
+                        }
+                      });
+                    }, 0);
+                  }}
                   placeholder="Rua, Avenida, etc."
                 />
               </div>
@@ -981,15 +1000,21 @@ export default function Imoveis() {
                 <Label htmlFor="number">Número</Label>
                 <Input
                   id="number"
+                  tabIndex={3}
                   value={formData.number}
                   onChange={(e) =>
                     setFormData({ ...formData, number: e.target.value })
                   }
-                  onBlur={(e) =>
-                    handleStandardizeInput(e.target.value, (value) =>
-                      setFormData({ ...formData, number: value })
-                    )
-                  }
+                  onBlur={(e) => {
+                    // Usa setTimeout para evitar mudanças de foco durante o blur
+                    setTimeout(() => {
+                      handleStandardizeInput(e.target.value, (value) => {
+                        if (value !== formData.number) {
+                          setFormData({ ...formData, number: value });
+                        }
+                      });
+                    }, 0);
+                  }}
                   placeholder="123"
                 />
               </div>
@@ -997,15 +1022,21 @@ export default function Imoveis() {
                 <Label htmlFor="complement">Complemento</Label>
                 <Input
                   id="complement"
+                  tabIndex={4}
                   value={formData.complement}
                   onChange={(e) =>
                     setFormData({ ...formData, complement: e.target.value })
                   }
-                  onBlur={(e) =>
-                    handleStandardizeInput(e.target.value, (value) =>
-                      setFormData({ ...formData, complement: value })
-                    )
-                  }
+                  onBlur={(e) => {
+                    // Usa setTimeout para evitar mudanças de foco durante o blur
+                    setTimeout(() => {
+                      handleStandardizeInput(e.target.value, (value) => {
+                        if (value !== formData.complement) {
+                          setFormData({ ...formData, complement: value });
+                        }
+                      });
+                    }, 0);
+                  }}
                   placeholder="Apto, Bloco, etc."
                 />
               </div>
@@ -1015,15 +1046,21 @@ export default function Imoveis() {
               <Label htmlFor="city">Cidade</Label>
               <Input
                 id="city"
+                tabIndex={5}
                 value={formData.city}
                 onChange={(e) =>
                   setFormData({ ...formData, city: e.target.value })
                 }
-                onBlur={(e) =>
-                  handleStandardizeInput(e.target.value, (value) =>
-                    setFormData({ ...formData, city: value })
-                  )
-                }
+                onBlur={(e) => {
+                  // Usa setTimeout para evitar mudanças de foco durante o blur
+                  setTimeout(() => {
+                    handleStandardizeInput(e.target.value, (value) => {
+                      if (value !== formData.city) {
+                        setFormData({ ...formData, city: value });
+                      }
+                    });
+                  }, 0);
+                }}
               />
             </div>
 
@@ -1038,7 +1075,7 @@ export default function Imoveis() {
                     setFormData({ ...formData, documentation_status: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger tabIndex={6}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -1055,7 +1092,7 @@ export default function Imoveis() {
                     setFormData({ ...formData, water_ownership: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger tabIndex={7}>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -1072,7 +1109,7 @@ export default function Imoveis() {
                     setFormData({ ...formData, energy_ownership: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger tabIndex={8}>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -1087,6 +1124,7 @@ export default function Imoveis() {
               <Label htmlFor="outstanding_bills">Contas em Aberto</Label>
               <Textarea
                 id="outstanding_bills"
+                tabIndex={9}
                 value={formData.outstanding_bills}
                 onChange={(e) =>
                   setFormData({
@@ -1105,6 +1143,7 @@ export default function Imoveis() {
                 </Label>
                 <Input
                   id="contract_start"
+                  tabIndex={10}
                   type="date"
                   value={formData.contract_start}
                   onChange={(e) =>
@@ -1116,6 +1155,7 @@ export default function Imoveis() {
                 <Label htmlFor="contract_end">Fim Contrato (Vigência)</Label>
                 <Input
                   id="contract_end"
+                  tabIndex={11}
                   type="date"
                   value={formData.contract_end}
                   onChange={(e) =>
@@ -1138,7 +1178,7 @@ export default function Imoveis() {
                       })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger tabIndex={12}>
                       <SelectValue placeholder="Tipo" />
                     </SelectTrigger>
                     <SelectContent className="bg-popover z-50">
@@ -1150,6 +1190,7 @@ export default function Imoveis() {
                   {formData.rent_adjustment_type && (
                     <Input
                       id="rent_adjustment_value"
+                      tabIndex={13}
                       type={formData.rent_adjustment_type === "text" ? "text" : "number"}
                       step={formData.rent_adjustment_type === "percent" ? "0.01" : "0.01"}
                       value={formData.rent_adjustment_value}
@@ -1179,6 +1220,7 @@ export default function Imoveis() {
                 </Label>
                 <Input
                   id="municipal_registration"
+                  tabIndex={14}
                   value={formData.municipal_registration}
                   onChange={(e) =>
                     setFormData({
@@ -1186,14 +1228,19 @@ export default function Imoveis() {
                       municipal_registration: e.target.value,
                     })
                   }
-                  onBlur={(e) =>
-                    handleStandardizeInput(e.target.value, (value) =>
-                      setFormData({
-                        ...formData,
-                        municipal_registration: value,
-                      })
-                    )
-                  }
+                  onBlur={(e) => {
+                    // Usa setTimeout para evitar mudanças de foco durante o blur
+                    setTimeout(() => {
+                      handleStandardizeInput(e.target.value, (value) => {
+                        if (value !== formData.municipal_registration) {
+                          setFormData({
+                            ...formData,
+                            municipal_registration: value,
+                          });
+                        }
+                      });
+                    }, 0);
+                  }}
                   placeholder="Número da inscrição municipal"
                 />
               </div>
@@ -1201,6 +1248,7 @@ export default function Imoveis() {
                 <Label htmlFor="venal_value">Valor Venal</Label>
                 <Input
                   id="venal_value"
+                  tabIndex={15}
                   type="text"
                   value={formData.venal_value}
                   onChange={(e) => {
@@ -1209,14 +1257,19 @@ export default function Imoveis() {
                     setFormData({ ...formData, venal_value: e.target.value });
                   }}
                   onBlur={(e) => {
-                    // Garante formatação correta ao sair do campo
-                    const parsed = parseCurrency(e.target.value);
-                    if (parsed !== null) {
-                      const formatted = formatCurrencyInput(parsed);
-                      setFormData({ ...formData, venal_value: formatted });
-                    } else if (e.target.value === "") {
-                      setFormData({ ...formData, venal_value: "" });
-                    }
+                    // Usa setTimeout para evitar mudanças de foco durante o blur
+                    setTimeout(() => {
+                      // Garante formatação correta ao sair do campo
+                      const parsed = parseCurrency(e.target.value);
+                      if (parsed !== null) {
+                        const formatted = formatCurrencyInput(parsed);
+                        if (formatted !== formData.venal_value) {
+                          setFormData({ ...formData, venal_value: formatted });
+                        }
+                      } else if (e.target.value === "") {
+                        setFormData({ ...formData, venal_value: "" });
+                      }
+                    }, 0);
                   }}
                   placeholder="0,00"
                 />
@@ -1344,10 +1397,11 @@ export default function Imoveis() {
                 variant="outline"
                 onClick={handleCloseDialog}
                 size="lg"
+                tabIndex={17}
               >
                 Cancelar
               </Button>
-              <Button type="submit" size="lg">
+              <Button type="submit" size="lg" tabIndex={16}>
                 {editingId ? "Atualizar" : "Cadastrar"}
               </Button>
             </div>

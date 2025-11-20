@@ -1997,6 +1997,54 @@ export default function Dashboard() {
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))'];
 
+  // Funções para abrir dialog de detalhes de categoria
+  const handleOpenRevenueDetails = useCallback((category: string) => {
+    setSelectedCategory({ category, type: "revenue" });
+    setCategoryDetailsDialogOpen(true);
+  }, []);
+
+  const handleOpenExpenseDetails = useCallback((category: string) => {
+    setSelectedCategory({ category, type: "expense" });
+    setCategoryDetailsDialogOpen(true);
+  }, []);
+
+  // Query para buscar detalhes de receitas/despesas por categoria
+  const { data: categoryDetails } = useQuery({
+    queryKey: ["category-details", selectedCategory, periodFilter, selectedMonth, selectedYear, customDateRange],
+    queryFn: async () => {
+      if (!selectedCategory) return [];
+      
+      const { startDate, endDate } = getDateRange();
+      const table = selectedCategory.type === "revenue" ? "revenue" : "expenses";
+      
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .order("date", { ascending: false });
+      
+      if (error) throw error;
+      
+      // Filtrar por categoria e período
+      return data.filter((item: any) => {
+        const itemCategory = (item.category && item.category.trim()) || "Sem categoria";
+        if (itemCategory !== selectedCategory.category) return false;
+        
+        const itemDate = new Date(item.date);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        // Verificar se está no período (considerando frequência)
+        const frequency = item.frequency || "Única";
+        if (frequency === "Única") {
+          return itemDate >= start && itemDate <= end;
+        }
+        // Para receitas/despesas recorrentes, incluir se começaram antes ou durante o período
+        return itemDate <= end;
+      });
+    },
+    enabled: !!selectedCategory && categoryDetailsDialogOpen,
+  });
+
   // Componente auxiliar para gráfico de Receitas por Categoria
   const RevenueCategoryChart = ({ data, title, subtitle, chartRef, onCategoryClick }: { 
     data: any[] | undefined, 
@@ -3674,6 +3722,7 @@ export default function Dashboard() {
             title="Receitas por Categoria"
             subtitle="Distribuição das receitas por categoria no período selecionado"
             chartRef={revenueCategoryChartRef}
+            onCategoryClick={handleOpenRevenueDetails}
           />
         </div>
       )}

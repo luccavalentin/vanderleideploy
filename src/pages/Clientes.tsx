@@ -723,16 +723,39 @@ const handleEdit = (client: any) => {
               {editingId ? "Edite os dados do cliente abaixo." : "Preencha os dados para cadastrar um novo cliente ou fornecedor."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" onKeyDown={(e) => {
+            // Previne mudanças de foco indesejadas ao pressionar Enter
+            if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.type !== 'submit') {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const inputs = Array.from(form.querySelectorAll('input, select, textarea')) as HTMLElement[];
+              const currentIndex = inputs.indexOf(e.target);
+              const nextInput = inputs[currentIndex + 1];
+              if (nextInput) {
+                nextInput.focus();
+              }
+            }
+          }}>
             <div className="space-y-2">
               <Label htmlFor="name">Nome Completo / Razão Social *</Label>
               <Input
                 id="name"
+                tabIndex={1}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, name: value }))}
+                onBlur={(e) => {
+                  // Usa setTimeout para evitar mudanças de foco durante o blur
+                  setTimeout(() => {
+                    handleStandardizeInput(e.target.value, (value) => {
+                      if (value !== formData.name) {
+                        setFormData({ ...formData, name: value });
+                      }
+                    });
+                  }, 0);
+                }}
                 placeholder="Digite o nome completo ou razão social"
                 required
+                autoComplete="name"
               />
             </div>
 
@@ -746,7 +769,7 @@ const handleEdit = (client: any) => {
                     setValidationErrors({ ...validationErrors, cpf_cnpj: undefined });
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger tabIndex={2}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -761,6 +784,7 @@ const handleEdit = (client: any) => {
                 </Label>
                 <Input
                   id="cpf_cnpj"
+                  tabIndex={3}
                   value={formData.cpf_cnpj}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -790,27 +814,30 @@ const handleEdit = (client: any) => {
                     }
                   }}
                   onBlur={(e) => {
-                    const value = e.target.value;
-                    if (value && value.trim()) {
-                      const cleanValue = value.replace(/[^\d]/g, "");
-                      const errors: { cpf_cnpj?: string } = {};
-                      
-                      if (formData.type === "Pessoa Física") {
-                        if (cleanValue.length === 11 && !validateCPF(value)) {
-                          errors.cpf_cnpj = "CPF inválido";
-                        } else if (cleanValue.length !== 11 && cleanValue.length > 0) {
-                          errors.cpf_cnpj = "CPF deve ter 11 dígitos";
+                    // Usa setTimeout para evitar mudanças de foco durante o blur
+                    setTimeout(() => {
+                      const value = e.target.value;
+                      if (value && value.trim()) {
+                        const cleanValue = value.replace(/[^\d]/g, "");
+                        const errors: { cpf_cnpj?: string } = {};
+                        
+                        if (formData.type === "Pessoa Física") {
+                          if (cleanValue.length === 11 && !validateCPF(value)) {
+                            errors.cpf_cnpj = "CPF inválido";
+                          } else if (cleanValue.length !== 11 && cleanValue.length > 0) {
+                            errors.cpf_cnpj = "CPF deve ter 11 dígitos";
+                          }
+                        } else {
+                          if (cleanValue.length === 14 && !validateCNPJ(value)) {
+                            errors.cpf_cnpj = "CNPJ inválido";
+                          } else if (cleanValue.length !== 14 && cleanValue.length > 0) {
+                            errors.cpf_cnpj = "CNPJ deve ter 14 dígitos";
+                          }
                         }
-                      } else {
-                        if (cleanValue.length === 14 && !validateCNPJ(value)) {
-                          errors.cpf_cnpj = "CNPJ inválido";
-                        } else if (cleanValue.length !== 14 && cleanValue.length > 0) {
-                          errors.cpf_cnpj = "CNPJ deve ter 14 dígitos";
-                        }
+                        
+                        setValidationErrors({ ...validationErrors, ...errors });
                       }
-                      
-                      setValidationErrors({ ...validationErrors, ...errors });
-                    }
+                    }, 0);
                   }}
                   className={validationErrors.cpf_cnpj ? "border-destructive" : ""}
                   placeholder={formData.type === "Pessoa Física" ? "000.000.000-00" : "00.000.000/0000-00"}
@@ -826,7 +853,8 @@ const handleEdit = (client: any) => {
               <Label htmlFor="phone">Telefone</Label>
               <Input
                 id="phone"
-                  type="tel"
+                tabIndex={4}
+                type="tel"
                 value={formData.phone}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -846,15 +874,18 @@ const handleEdit = (client: any) => {
                   }
                 }}
                 onBlur={(e) => {
-                  const value = e.target.value;
-                  if (value && value.trim() && !validatePhone(value)) {
-                    setValidationErrors({ 
-                      ...validationErrors, 
-                      phone: "Telefone inválido (deve ter 10 ou 11 dígitos)" 
-                    });
-                  } else if (value && value.trim() && validatePhone(value)) {
-                    setValidationErrors({ ...validationErrors, phone: undefined });
-                  }
+                  // Usa setTimeout para evitar mudanças de foco durante o blur
+                  setTimeout(() => {
+                    const value = e.target.value;
+                    if (value && value.trim() && !validatePhone(value)) {
+                      setValidationErrors({ 
+                        ...validationErrors, 
+                        phone: "Telefone inválido (deve ter 10 ou 11 dígitos)" 
+                      });
+                    } else if (value && value.trim() && validatePhone(value)) {
+                      setValidationErrors({ ...validationErrors, phone: undefined });
+                    }
+                  }, 0);
                 }}
                 className={validationErrors.phone ? "border-destructive" : ""}
                 placeholder="(00) 00000-0000"
@@ -868,6 +899,7 @@ const handleEdit = (client: any) => {
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  tabIndex={5}
                   type="email"
                   value={formData.email}
                   onChange={(e) => {
@@ -877,15 +909,18 @@ const handleEdit = (client: any) => {
                     }
                   }}
                   onBlur={(e) => {
-                    const value = e.target.value.trim();
-                    if (value && !validateEmail(value)) {
-                      setValidationErrors({ 
-                        ...validationErrors, 
-                        email: "Email inválido" 
-                      });
-                    } else {
-                      setValidationErrors({ ...validationErrors, email: undefined });
-                    }
+                    // Usa setTimeout para evitar mudanças de foco durante o blur
+                    setTimeout(() => {
+                      const value = e.target.value.trim();
+                      if (value && !validateEmail(value)) {
+                        setValidationErrors({ 
+                          ...validationErrors, 
+                          email: "Email inválido" 
+                        });
+                      } else {
+                        setValidationErrors({ ...validationErrors, email: undefined });
+                      }
+                    }, 0);
                   }}
                   className={validationErrors.email ? "border-destructive" : ""}
                   placeholder="exemplo@email.com"
@@ -900,10 +935,21 @@ const handleEdit = (client: any) => {
               <Label htmlFor="address">Endereço Completo</Label>
               <Input
                 id="address"
+                tabIndex={6}
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, address: value }))}
+                onBlur={(e) => {
+                  // Usa setTimeout para evitar mudanças de foco durante o blur
+                  setTimeout(() => {
+                    handleStandardizeInput(e.target.value, (value) => {
+                      if (value !== formData.address) {
+                        setFormData({ ...formData, address: value });
+                      }
+                    });
+                  }, 0);
+                }}
                 placeholder="Rua, número, complemento, bairro, cidade - UF"
+                autoComplete="street-address"
               />
             </div>
 
@@ -911,19 +957,29 @@ const handleEdit = (client: any) => {
               <Label htmlFor="notes">Anotações</Label>
               <Textarea
                 id="notes"
+                tabIndex={7}
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, notes: value }))}
+                onBlur={(e) => {
+                  // Usa setTimeout para evitar mudanças de foco durante o blur
+                  setTimeout(() => {
+                    handleStandardizeInput(e.target.value, (value) => {
+                      if (value !== formData.notes) {
+                        setFormData({ ...formData, notes: value });
+                      }
+                    });
+                  }, 0);
+                }}
                 rows={3}
                 placeholder="Informações adicionais sobre o cliente..."
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={handleCloseDialog}>
+              <Button type="button" variant="outline" onClick={handleCloseDialog} tabIndex={9}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} tabIndex={8}>
                 {editingId ? "Atualizar" : "Cadastrar"}
               </Button>
             </div>
