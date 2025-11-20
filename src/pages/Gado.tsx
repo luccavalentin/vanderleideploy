@@ -153,6 +153,17 @@ export default function Gado() {
     }).format(value);
   };
 
+  // Formatação responsiva para valores grandes
+  const formatCurrencyResponsive = (value: number) => {
+    const formatted = formatCurrency(value);
+    // Para valores muito grandes, usar formato compacto em mobile
+    if (value >= 1000000 && window.innerWidth < 640) {
+      const millions = (value / 1000000).toFixed(2);
+      return `R$ ${millions}M`;
+    }
+    return formatted;
+  };
+
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
 
   const createMutation = useMutation({
@@ -476,37 +487,41 @@ export default function Gado() {
               <p className="text-sm text-muted-foreground mb-4">
                 Peso total e valor estimado do rebanho
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-card/50 rounded-lg p-4 border border-border/50">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-primary/30 transition-colors">
+                  <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                     Peso Total (kg)
                   </p>
-                  <p className="text-2xl font-bold text-foreground">
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground break-words leading-tight">
                     {weightCalculator.totalWeightKg.toLocaleString('pt-BR', { 
                       minimumFractionDigits: 2, 
                       maximumFractionDigits: 2 
-                    })} kg
+                    })} <span className="text-xs sm:text-sm font-normal text-muted-foreground">kg</span>
                   </p>
                 </div>
-                <div className="bg-card/50 rounded-lg p-4 border border-border/50">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-primary/30 transition-colors">
+                  <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                     Peso Total (@)
                   </p>
-                  <p className="text-2xl font-bold text-primary">
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary break-words leading-tight">
                     {weightCalculator.totalWeightArroba.toLocaleString('pt-BR', { 
                       minimumFractionDigits: 2, 
                       maximumFractionDigits: 2 
-                    })} @
+                    })} <span className="text-xs sm:text-sm font-normal text-muted-foreground">@</span>
                   </p>
                 </div>
-                <div className="bg-card/50 rounded-lg p-4 border border-border/50">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-success/30 transition-colors">
+                  <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                     Valor Total (R$)
                   </p>
-                  <p className="text-2xl font-bold text-success">
+                  <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold text-success break-words leading-tight" style={{ 
+                    wordBreak: 'break-word', 
+                    overflowWrap: 'break-word',
+                    lineHeight: '1.2'
+                  }}>
                     {formatCurrency(weightCalculator.totalValue)}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-2 pt-2 border-t border-border/30">
                     @ a {formatCurrency(arrobaPrice)}
                   </p>
                 </div>
@@ -609,6 +624,7 @@ export default function Gado() {
           title="Valor Total"
           value={formatCurrency(stats.totalValue)}
           icon={DollarSign}
+          variant="warning"
           className="bg-gradient-to-br from-warning/10 to-warning/5"
           onClick={() => {
             setSelectedStat("value");

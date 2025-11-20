@@ -75,16 +75,17 @@ export function StatsCard({ title, value, icon: Icon, trend, variant = "default"
               "text-muted-foreground"
             )}>{title}</p>
             <p className={cn(
-              "text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-bold tracking-tight leading-tight",
+              "text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold tracking-tight leading-tight break-words",
               variant === "success" ? "text-success" : 
               variant === "destructive" ? "text-destructive" : 
               variant === "warning" ? "text-warning" : 
               "text-foreground"
             )} style={{ 
               wordBreak: 'break-word', 
-              overflowWrap: 'anywhere',
+              overflowWrap: 'break-word',
               hyphens: 'auto',
-              maxWidth: '100%'
+              maxWidth: '100%',
+              lineHeight: '1.2'
             }}>{value}</p>
             {trend && (
               <p className={cn("text-[10px] sm:text-xs font-semibold flex items-center gap-1", trend.isPositive ? "text-success" : "text-destructive")}>
