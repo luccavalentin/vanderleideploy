@@ -2153,8 +2153,8 @@ export default function Dashboard() {
             </div>
 
             {/* Lista de Categorias com Detalhes */}
-            <div className="space-y-3 border-t pt-4">
-              <h4 className="text-sm font-semibold text-foreground mb-3">Detalhamento por Categoria</h4>
+            <div className="space-y-2 sm:space-y-3 border-t pt-3 sm:pt-4">
+              <h4 className="text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">Detalhamento por Categoria</h4>
               {sortedData.map((item: any, index: number) => {
                 const percent = total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0';
                 const categoryName = item.category || "Sem categoria";
@@ -2163,15 +2163,16 @@ export default function Dashboard() {
                 return (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+                    onClick={() => onCategoryClick && onCategoryClick(categoryName)}
+                    className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50 cursor-pointer"
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                       <div
-                        className="w-4 h-4 rounded-full flex-shrink-0"
+                        className="w-3 h-3 sm:w-4 sm:h-4 rounded-full flex-shrink-0"
                         style={{ backgroundColor: COLORS[colorIndex % COLORS.length] }}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm sm:text-base text-foreground truncate">
+                        <p className="font-semibold text-xs sm:text-sm md:text-base text-foreground break-words">
                           {categoryName}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
@@ -2179,8 +2180,8 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className="font-bold text-base sm:text-lg text-primary">
+                    <div className="text-right flex-shrink-0 ml-2 sm:ml-4">
+                      <p className="font-bold text-xs sm:text-sm md:text-base lg:text-lg text-primary">
                         {formatCurrency(item.amount)}
                       </p>
                     </div>
@@ -2189,10 +2190,10 @@ export default function Dashboard() {
               })}
               
               {/* Total */}
-              <div className="mt-4 pt-4 border-t border-border">
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-border">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-base sm:text-lg text-foreground">Total</span>
-                  <span className="font-bold text-lg sm:text-xl text-primary">
+                  <span className="font-bold text-sm sm:text-base md:text-lg text-foreground">Total</span>
+                  <span className="font-bold text-base sm:text-lg md:text-xl text-primary">
                     {formatCurrency(total)}
                   </span>
                 </div>
@@ -4101,6 +4102,81 @@ export default function Dashboard() {
                     </div>
                   )
                 )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Detalhes de Categoria */}
+      <Dialog open={categoryDetailsDialogOpen} onOpenChange={setCategoryDetailsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl md:text-2xl font-bold">
+              Detalhes - {selectedCategory?.category || "Categoria"}
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              {selectedCategory?.type === "revenue" 
+                ? "Lista completa de receitas desta categoria no período selecionado"
+                : "Lista completa de despesas desta categoria no período selecionado"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {categoryDetails && categoryDetails.length > 0 ? (
+              <div className="rounded-lg border border-border/50 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gradient-to-r from-primary/10 to-primary/5">
+                        <TableHead className="font-bold text-xs sm:text-sm">Descrição</TableHead>
+                        <TableHead className="font-bold text-xs sm:text-sm">Data</TableHead>
+                        <TableHead className="font-bold text-xs sm:text-sm">Categoria</TableHead>
+                        {selectedCategory?.type === "revenue" && (
+                          <TableHead className="font-bold text-xs sm:text-sm">Classificação</TableHead>
+                        )}
+                        <TableHead className="font-bold text-xs sm:text-sm text-center">Valor</TableHead>
+                        <TableHead className="font-bold text-xs sm:text-sm">Periodicidade</TableHead>
+                        <TableHead className="font-bold text-xs sm:text-sm">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categoryDetails.map((item: any) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="text-xs sm:text-sm max-w-[150px] truncate">{item.description || "-"}</TableCell>
+                          <TableCell className="text-xs sm:text-sm whitespace-nowrap">
+                            {format(new Date(item.date), "dd/MM/yyyy", { locale: ptBR })}
+                          </TableCell>
+                          <TableCell className="text-xs sm:text-sm">{item.category || "-"}</TableCell>
+                          {selectedCategory?.type === "revenue" && (
+                            <TableCell className="text-xs sm:text-sm">{item.classification || "-"}</TableCell>
+                          )}
+                          <TableCell className="text-xs sm:text-sm text-center font-bold text-primary">
+                            {formatCurrency(item.amount)}
+                          </TableCell>
+                          <TableCell className="text-xs sm:text-sm">{item.frequency || "Única"}</TableCell>
+                          <TableCell className="text-xs sm:text-sm">
+                            <Badge variant={item.status === "PAGO" || item.status === "RECEBIDO" ? "default" : "secondary"}>
+                              {item.status || "-"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="p-4 border-t bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm sm:text-base">Total:</span>
+                    <span className="font-bold text-base sm:text-lg text-primary">
+                      {formatCurrency(categoryDetails.reduce((sum: number, item: any) => sum + (item.amount || 0), 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm sm:text-base">Nenhum registro encontrado para esta categoria</p>
               </div>
             )}
           </div>

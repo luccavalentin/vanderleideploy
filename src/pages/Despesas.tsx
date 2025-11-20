@@ -578,18 +578,15 @@ export default function Despesas() {
                 </div>
                 {expenseByCategory.length > 0 ? (
                   <div className="w-full overflow-visible">
-                    <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 250} className="min-h-[200px] md:min-h-[250px]">
-                      <PieChart>
+                    <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : window.innerWidth < 768 ? 280 : 300} className="min-h-[320px] sm:min-h-[280px] md:min-h-[300px]">
+                      <PieChart margin={{ top: 10, right: 10, bottom: typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 80, left: 10 }}>
                         <Pie
                           data={expenseByCategory}
                           cx="50%"
-                          cy="50%"
+                          cy={typeof window !== 'undefined' && window.innerWidth < 640 ? "40%" : "45%"}
                           labelLine={false}
-                          label={({ name, percent, value }) => {
-                            if (value === 0) return '';
-                            return `${name}: ${(percent * 100).toFixed(0)}%`;
-                          }}
-                          outerRadius={80}
+                          label={false}
+                          outerRadius={typeof window !== 'undefined' && window.innerWidth < 640 ? 60 : 70}
                           fill="#8884d8"
                           dataKey="value"
                         >
@@ -602,19 +599,34 @@ export default function Despesas() {
                             backgroundColor: 'hsl(var(--popover))', 
                             border: '1px solid hsl(var(--border))',
                             borderRadius: '0.75rem',
-                            padding: '12px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                            padding: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '11px' : '13px'
                           }}
                           formatter={(value: any) => formatCurrency(value)}
                         />
                         <Legend 
                           verticalAlign="bottom" 
-                          height={36}
+                          height={typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 60}
                           iconType="circle"
                           wrapperStyle={{ 
-                            paddingTop: '20px',
-                            fontSize: '11px',
-                            fontWeight: '500'
+                            paddingTop: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '20px',
+                            fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '11px',
+                            fontWeight: '500',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
+                            width: '100%',
+                            maxWidth: '100%',
+                            overflow: 'visible',
+                            lineHeight: '1.6',
+                            wordBreak: 'break-word',
+                            whiteSpace: 'normal'
+                          }}
+                          formatter={(value) => {
+                            const maxLength = typeof window !== 'undefined' && window.innerWidth < 640 ? 20 : 30;
+                            return value.length > maxLength ? value.substring(0, maxLength) + '...' : value;
                           }}
                         />
                       </PieChart>
