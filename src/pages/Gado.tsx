@@ -153,17 +153,6 @@ export default function Gado() {
     }).format(value);
   };
 
-  // Formatação responsiva para valores grandes
-  const formatCurrencyResponsive = (value: number) => {
-    const formatted = formatCurrency(value);
-    // Para valores muito grandes, usar formato compacto em mobile
-    if (value >= 1000000 && window.innerWidth < 640) {
-      const millions = (value / 1000000).toFixed(2);
-      return `R$ ${millions}M`;
-    }
-    return formatted;
-  };
-
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
 
   const createMutation = useMutation({
