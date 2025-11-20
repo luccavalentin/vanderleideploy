@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { TaskNotificationDialog } from "@/components/TaskNotificationDialog";
 import { useTaskNotifications } from "@/hooks/useTaskNotifications";
 import { useToast } from "@/hooks/use-toast";
-import { QuickActions } from "@/components/QuickActions";
 import { 
   DollarSign, 
   TrendingDown, 
@@ -3047,8 +3046,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      <QuickActions />
 
       {comparisonMode ? (
         <div className="space-y-6 mb-6">
