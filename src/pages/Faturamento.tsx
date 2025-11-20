@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -53,22 +53,14 @@ export default function Faturamento() {
       return failureCount < 2;
     },
     retryDelay: 1000,
-    staleTime: 0, // Sempre buscar dados frescos
-    refetchOnMount: true, // Sempre refetch ao montar
+    staleTime: 60000, // Cache por 1 minuto para melhor performance
+    refetchOnMount: false, // Não refetch ao montar se dados estão frescos
     refetchOnWindowFocus: false, // Não refetch ao focar na janela
     refetchOnReconnect: true, // Refetch ao reconectar
   });
 
-  // Garantir que os dados sejam atualizados ao montar o componente
-  useEffect(() => {
-    // Força refetch ao montar para garantir dados atualizados
-    const timer = setTimeout(() => {
-      refetchRevenues();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [refetchRevenues]);
-
   // Gerar todos os meses disponíveis, cobrindo do menor ao maior mês das receitas
+  // Otimizado para limitar o range de meses e evitar cálculos excessivos
   const allMonths = useMemo(() => {
     // Se não há receitas ou ainda está carregando, retornar apenas o mês atual
     if (!consolidatedRevenues || consolidatedRevenues.length === 0) {
@@ -81,43 +73,56 @@ export default function Faturamento() {
       }];
     }
 
-    let minDate = new Date();
-    let maxDate = new Date();
+    const today = new Date();
+    const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    let minDate = new Date(currentMonth);
+    let maxDate = new Date(currentMonth);
     let hasValidDate = false;
 
-    consolidatedRevenues.forEach((revenue: any) => {
+    // Limitar o range para evitar cálculos excessivos (máximo 5 anos para frente e 2 anos para trás)
+    const maxFutureDate = new Date(today.getFullYear() + 5, today.getMonth(), 1);
+    const maxPastDate = new Date(today.getFullYear() - 2, today.getMonth(), 1);
+
+    // Processar receitas de forma otimizada
+    for (let i = 0; i < consolidatedRevenues.length; i++) {
+      const revenue = consolidatedRevenues[i];
       let d = typeof revenue.date === 'string' ? new Date(revenue.date) : revenue.date;
-      if (d instanceof Date && !isNaN(d.getTime())) {
-        if (!hasValidDate) {
-          minDate = new Date(d.getFullYear(), d.getMonth(), 1);
-          maxDate = new Date(d.getFullYear(), d.getMonth(), 1);
-          hasValidDate = true;
-        } else {
-          const revenueMonth = new Date(d.getFullYear(), d.getMonth(), 1);
-          if (revenueMonth < minDate) minDate = revenueMonth;
-          if (revenueMonth > maxDate) maxDate = revenueMonth;
-        }
-        
-        // Considerar parcelas futuras
-        if (revenue.frequency && revenue.frequency.toString().toUpperCase() !== 'ÚNICA') {
-          const installmentsCount = revenue.installments ? parseInt(revenue.installments.toString()) : null;
-          if (installmentsCount && installmentsCount > 1) {
-            if (revenue.frequency.toString().toUpperCase().includes('MENSAL')) {
-              const futureMonth = new Date(d.getFullYear(), d.getMonth() + installmentsCount - 1, 1);
-              if (futureMonth > maxDate) maxDate = futureMonth;
-            } else if (revenue.frequency.toString().toUpperCase().includes('ANUAL')) {
-              const futureYear = new Date(d.getFullYear() + installmentsCount - 1, d.getMonth(), 1);
-              if (futureYear > maxDate) maxDate = futureYear;
-            }
+      if (!(d instanceof Date) || isNaN(d.getTime())) continue;
+      
+      const revenueMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+      
+      if (!hasValidDate) {
+        minDate = new Date(revenueMonth);
+        maxDate = new Date(revenueMonth);
+        hasValidDate = true;
+      } else {
+        if (revenueMonth < minDate) minDate = new Date(revenueMonth);
+        if (revenueMonth > maxDate) maxDate = new Date(revenueMonth);
+      }
+      
+      // Considerar parcelas futuras (limitado)
+      if (revenue.frequency && revenue.frequency.toString().toUpperCase() !== 'ÚNICA') {
+        const installmentsCount = revenue.installments ? parseInt(revenue.installments.toString()) : null;
+        if (installmentsCount && installmentsCount > 1) {
+          let futureDate: Date;
+          if (revenue.frequency.toString().toUpperCase().includes('MENSAL')) {
+            futureDate = new Date(d.getFullYear(), d.getMonth() + installmentsCount - 1, 1);
+          } else if (revenue.frequency.toString().toUpperCase().includes('ANUAL')) {
+            futureDate = new Date(d.getFullYear() + installmentsCount - 1, d.getMonth(), 1);
+          } else {
+            continue;
+          }
+          
+          // Limitar data futura
+          if (futureDate > maxDate && futureDate <= maxFutureDate) {
+            maxDate = new Date(futureDate);
           }
         }
       }
-    });
+    }
 
     // Se não encontrou nenhuma data válida, usar o mês atual
     if (!hasValidDate) {
-      const today = new Date();
-      const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       return [{
         key: format(currentMonth, "yyyy-MM"),
         label: format(currentMonth, "MMM/yyyy", { locale: ptBR }).toUpperCase(),
@@ -125,23 +130,28 @@ export default function Faturamento() {
       }];
     }
 
-    // Garantir que o mês atual está incluído
-    const today = new Date();
-    const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    if (currentMonth < minDate) minDate = currentMonth;
-    if (currentMonth > maxDate) maxDate = currentMonth;
+    // Garantir limites
+    if (minDate < maxPastDate) minDate = new Date(maxPastDate);
+    if (maxDate > maxFutureDate) maxDate = new Date(maxFutureDate);
+    if (currentMonth < minDate) minDate = new Date(currentMonth);
+    if (currentMonth > maxDate) maxDate = new Date(currentMonth);
 
-    // Gerar lista de meses entre minDate e maxDate
+    // Gerar lista de meses entre minDate e maxDate (limitado)
     const monthsList = [];
     let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-    while (current <= maxDate) {
+    const maxMonths = 120; // Limitar a 120 meses (10 anos) para evitar loops infinitos
+    let monthCount = 0;
+    
+    while (current <= maxDate && monthCount < maxMonths) {
       monthsList.push({
         key: format(current, "yyyy-MM"),
         label: format(current, "MMM/yyyy", { locale: ptBR }).toUpperCase(),
         fullDate: new Date(current),
       });
       current.setMonth(current.getMonth() + 1);
+      monthCount++;
     }
+    
     return monthsList;
   }, [consolidatedRevenues]);
 
@@ -344,33 +354,44 @@ export default function Faturamento() {
   };
 
   // Processar receitas consolidadas agrupadas por categoria e mês
+  // Otimizado para melhor performance com memoização adequada
   const billingData = useMemo(() => {
     // Se ainda está carregando ou não há receitas, retornar array vazio
-    if (revenuesLoading || !consolidatedRevenues || consolidatedRevenues.length === 0) {
+    if (revenuesLoading || !consolidatedRevenues || consolidatedRevenues.length === 0 || allMonths.length === 0) {
       return [];
     }
 
     // Agrupar receitas por categoria
     const byCategory: Record<string, Record<string, number>> = {};
+    
+    // Criar mapa de meses uma vez para melhor performance
+    const monthsMap = new Map(allMonths.map(m => [m.key, true]));
 
-    consolidatedRevenues.forEach((revenue: any) => {
+    // Processar receitas de forma otimizada
+    // Limitar processamento para evitar lag (máximo 1000 receitas por vez)
+    const maxRevenues = Math.min(consolidatedRevenues.length, 1000);
+    
+    for (let i = 0; i < maxRevenues; i++) {
+      const revenue = consolidatedRevenues[i];
       const category = revenue.category || "Sem Categoria";
       
-      // Gerar todas as parcelas para esta receita usando allMonths (não months)
+      // Gerar todas as parcelas para esta receita usando allMonths
       const installments = generateInstallments(revenue, allMonths);
       
-      installments.forEach(({ monthKey, amount }) => {
-        if (!byCategory[category]) {
-          byCategory[category] = {};
+      // Inicializar categoria se necessário
+      if (!byCategory[category]) {
+        byCategory[category] = {};
+      }
+      
+      // Processar parcelas
+      for (let j = 0; j < installments.length; j++) {
+        const { monthKey, amount } = installments[j];
+        // Só processar se o mês está na lista de meses disponíveis
+        if (monthsMap.has(monthKey)) {
+          byCategory[category][monthKey] = (byCategory[category][monthKey] || 0) + amount;
         }
-
-        if (!byCategory[category][monthKey]) {
-          byCategory[category][monthKey] = 0;
-        }
-
-        byCategory[category][monthKey] += amount;
-      });
-    });
+      }
+    }
 
     // Converter para array de dados
     return Object.entries(byCategory).map(([category, monthlyData]) => {
