@@ -104,14 +104,17 @@ export default function Gado() {
     const total = cattle.length;
     const femeas = cattle.filter((c: any) => c.category === "Fêmea").length;
     const machos = cattle.filter((c: any) => c.category === "Macho").length;
-    const totalValue = cattle.reduce((sum: number, c: any) => sum + ((c.purchase_price || 0) * (c.quantity || 1)), 0);
-    const totalQuantity = cattle.reduce((sum: number, c: any) => sum + (c.quantity || 1), 0);
+    // Quantidade total: soma todas as quantidades de cada lote
+    const totalQuantity = cattle.reduce((sum: number, c: any) => {
+      const quantity = parseInt(c.quantity) || 0;
+      return sum + quantity;
+    }, 0);
     
     return { 
       total: total.toString(), 
       femeas: femeas.toString(), 
       machos: machos.toString(), 
-      totalValue,
+      totalValue: 0, // Não usado mais, o valor total vem do weightCalculator
       totalQuantity: totalQuantity.toString()
     };
   }, [cattle]);
@@ -126,11 +129,10 @@ export default function Gado() {
       };
     }
 
-    // Soma o peso total: weight * quantity para cada lote
+    // Soma o peso total: weight já é o peso total do lote, não precisa multiplicar por quantity
     const totalWeightKg = cattle.reduce((sum: number, c: any) => {
       const weight = parseFloat(c.weight || 0);
-      const quantity = parseInt(c.quantity || 1);
-      return sum + (weight * quantity);
+      return sum + weight;
     }, 0);
 
     // Converte para arroba (1 @ = 15 kg)
@@ -611,7 +613,7 @@ export default function Gado() {
         />
         <StatsCard
           title="Valor Total"
-          value={formatCurrency(stats.totalValue)}
+          value={formatCurrency(weightCalculator.totalValue)}
           icon={DollarSign}
           variant="warning"
           className="bg-gradient-to-br from-warning/10 to-warning/5"
