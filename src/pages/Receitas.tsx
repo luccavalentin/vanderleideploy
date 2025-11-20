@@ -93,7 +93,7 @@ export default function Receitas() {
         documentation_status: "PENDENTE",
       });
       setIsDialogOpen(true);
-      // Remove o parâmetro da URL para não abrir novamente ao recarregar
+      // Remove apenas o parâmetro "novo" da URL, mantendo "categoria" se existir
       const newSearchParams = new URLSearchParams(searchParams);
       newSearchParams.delete("novo");
       setSearchParams(newSearchParams, { replace: true });
@@ -157,12 +157,14 @@ export default function Receitas() {
       toast({ title: "Receita cadastrada com sucesso!" });
       if (keepDialogOpen) {
         // Limpar formulário mas manter dialog aberto
+        // Manter categoria se vier da URL (ex: quando vem da tela de Gado)
+        const categoryFromUrl = categoriaFilter || "";
         setFormData({
           description: "",
           amount: "",
           date: "",
           classification: "",
-          category: "",
+          category: categoryFromUrl, // Mantém categoria da URL se existir
           frequency: "",
           frequency_type: "",
           installments: "",
@@ -383,12 +385,14 @@ export default function Receitas() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingId(null);
+    // Manter categoria se vier da URL (ex: quando vem da tela de Gado)
+    const categoryFromUrl = categoriaFilter || "";
     setFormData({
       description: "",
       amount: "",
       date: "",
       classification: "",
-      category: "",
+      category: categoryFromUrl, // Mantém categoria da URL se existir
       frequency: "",
       frequency_type: "",
       installments: "",

@@ -89,7 +89,7 @@ export default function Despesas() {
         status: "PENDENTE",
       });
       setIsDialogOpen(true);
-      // Remove o parâmetro da URL para não abrir novamente ao recarregar
+      // Remove apenas o parâmetro "novo" da URL, mantendo "categoria" se existir
       const newSearchParams = new URLSearchParams(searchParams);
       newSearchParams.delete("novo");
       setSearchParams(newSearchParams, { replace: true });
@@ -146,11 +146,13 @@ export default function Despesas() {
       toast({ title: "Despesa cadastrada com sucesso!" });
       if (keepDialogOpen) {
         // Limpar formulário mas manter dialog aberto
+        // Manter categoria se vier da URL (ex: quando vem da tela de Gado)
+        const categoryFromUrl = categoriaFilter || "";
         setFormData({
           description: "",
           amount: "",
           date: "",
-          category: "",
+          category: categoryFromUrl, // Mantém categoria da URL se existir
           frequency: "",
           frequency_type: "",
           installments: "",
@@ -365,11 +367,13 @@ export default function Despesas() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingId(null);
+    // Manter categoria se vier da URL (ex: quando vem da tela de Gado)
+    const categoryFromUrl = categoriaFilter || "";
     setFormData({
       description: "",
       amount: "",
       date: "",
-      category: "",
+      category: categoryFromUrl, // Mantém categoria da URL se existir
       frequency: "",
       frequency_type: "",
       installments: "",
