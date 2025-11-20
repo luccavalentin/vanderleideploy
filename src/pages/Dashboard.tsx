@@ -2195,7 +2195,8 @@ export default function Dashboard() {
               {sortedData.map((item: any, index: number) => {
                 const percent = total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0';
                 const categoryName = item.category || "Sem categoria";
-                const colorIndex = data.findIndex((d: any) => d.category === item.category || (!d.category && !item.category));
+                // Usar o índice do sortedData para garantir que a cor corresponda à barra do gráfico
+                const colorIndex = index;
                 
                 return (
                   <div
@@ -2383,7 +2384,8 @@ export default function Dashboard() {
               {sortedData.map((item: any, index: number) => {
                 const percent = total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0';
                 const categoryName = item.category || "Sem categoria";
-                const colorIndex = data.findIndex((d: any) => d.category === item.category || (!d.category && !item.category));
+                // Usar o índice do sortedData para garantir que a cor corresponda à barra do gráfico
+                const colorIndex = index;
                 
                 return (
                   <div
