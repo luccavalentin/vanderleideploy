@@ -2224,16 +2224,16 @@ export default function Dashboard() {
     if (!data || data.length === 0) {
       return (
         <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
-          <CardHeader className="pb-4 px-4 sm:px-6">
-            <CardTitle className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-primary" />
-              <span>{title}</span>
+          <CardHeader className="pb-3 sm:pb-4 px-3 sm:px-4 md:px-6">
+            <CardTitle className="text-base sm:text-lg md:text-xl font-bold tracking-tight flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+              <span className="break-words">{title}</span>
             </CardTitle>
             {subtitle && (
-              <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">{subtitle}</p>
             )}
           </CardHeader>
-          <CardContent className="px-4 sm:px-6 pb-6">
+          <CardContent className="px-3 sm:px-4 md:px-6 pb-4 sm:pb-6">
             <div ref={chartRef} className="w-full">
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <BarChart3 className="w-12 h-12 text-muted-foreground/50 mb-4" />
@@ -2251,49 +2251,62 @@ export default function Dashboard() {
 
     return (
       <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
-        <CardHeader className="pb-4 px-4 sm:px-6">
-          <CardTitle className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-primary" />
-            <span>{title}</span>
+        <CardHeader className="pb-3 sm:pb-4 px-3 sm:px-4 md:px-6">
+          <CardTitle className="text-base sm:text-lg md:text-xl font-bold tracking-tight flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+            <span className="break-words">{title}</span>
           </CardTitle>
           {subtitle && (
-            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">{subtitle}</p>
           )}
         </CardHeader>
-        <CardContent className="px-4 sm:px-6 pb-6">
+        <CardContent className="px-3 sm:px-4 md:px-6 pb-4 sm:pb-6">
           <div ref={chartRef} className="w-full">
             {/* Gráfico de Barras Horizontal */}
-            <div className="mb-6">
-              <ResponsiveContainer width="100%" height={Math.max(300, (data.length * 60) + 100)}>
+            <div className="mb-4 sm:mb-6">
+              <ResponsiveContainer width="100%" height={Math.max(250, (data.length * 50) + 80)}>
                 <BarChart
                   data={sortedData}
                   layout="vertical"
                   margin={{ 
-                    top: 10, 
-                    right: window.innerWidth < 640 ? 10 : 30, 
-                    left: window.innerWidth < 640 ? 70 : 100, 
-                    bottom: 10 
+                    top: 5, 
+                    right: 5, 
+                    left: 80, 
+                    bottom: 5 
                   }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
                   <XAxis 
                     type="number" 
-                    tickFormatter={(value) => formatCurrency(value)}
+                    tickFormatter={(value) => {
+                      const formatted = formatCurrency(value);
+                      // Reduzir tamanho da formatação para mobile
+                      if (window.innerWidth < 640) {
+                        return formatted.replace('R$', '').trim();
+                      }
+                      return formatted;
+                    }}
                     stroke="hsl(var(--muted-foreground))"
-                    fontSize={window.innerWidth < 640 ? 10 : 12}
-                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    fontSize={9}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
                   />
                   <YAxis 
                     type="category" 
                     dataKey="category" 
-                    width={window.innerWidth < 640 ? 65 : 90}
-                    tick={{ fill: 'hsl(var(--foreground))', fontSize: window.innerWidth < 640 ? 10 : 12 }}
+                    width={75}
+                    tick={{ fill: 'hsl(var(--foreground))', fontSize: 9 }}
                     stroke="hsl(var(--muted-foreground))"
                     tickFormatter={(value) => {
-                      if (window.innerWidth < 640 && value && value.length > 12) {
-                        return value.substring(0, 10) + '...';
+                      if (!value) return "Sem categoria";
+                      // Para mobile, truncar mais agressivamente
+                      if (window.innerWidth < 640) {
+                        if (value.length > 15) {
+                          return value.substring(0, 13) + '...';
+                        }
+                      } else if (value.length > 20) {
+                        return value.substring(0, 18) + '...';
                       }
-                      return value || "Sem categoria";
+                      return value;
                     }}
                   />
                   <Tooltip
@@ -2301,11 +2314,18 @@ export default function Dashboard() {
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '0.5rem',
-                      padding: '10px 14px',
+                      padding: window.innerWidth < 640 ? '8px 10px' : '10px 14px',
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      fontSize: window.innerWidth < 640 ? '11px' : '13px',
                     }}
                     formatter={(value: any) => formatCurrency(value)}
-                    labelStyle={{ fontWeight: 'bold', marginBottom: '6px', color: 'hsl(var(--foreground))' }}
+                    labelFormatter={(label) => label || "Sem categoria"}
+                    labelStyle={{ 
+                      fontWeight: 'bold', 
+                      marginBottom: '4px', 
+                      color: 'hsl(var(--foreground))',
+                      fontSize: window.innerWidth < 640 ? '11px' : '13px',
+                    }}
                     cursor={{ fill: 'hsl(var(--primary) / 0.1)' }}
                   />
                   <Bar 
@@ -2321,8 +2341,8 @@ export default function Dashboard() {
             </div>
 
             {/* Lista de Categorias com Detalhes */}
-            <div className="space-y-3 border-t pt-4">
-              <h4 className="text-sm font-semibold text-foreground mb-3">Detalhamento por Categoria</h4>
+            <div className="space-y-2 sm:space-y-3 border-t pt-3 sm:pt-4">
+              <h4 className="text-xs sm:text-sm font-semibold text-foreground mb-2 sm:mb-3">Detalhamento por Categoria</h4>
               {sortedData.map((item: any, index: number) => {
                 const percent = total > 0 ? ((item.amount / total) * 100).toFixed(1) : '0';
                 const categoryName = item.category || "Sem categoria";
@@ -2331,24 +2351,33 @@ export default function Dashboard() {
                 return (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50"
+                    onClick={() => onCategoryClick && onCategoryClick(categoryName)}
+                    className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-muted/30 hover:bg-muted/50 active:bg-muted/60 transition-colors border border-border/50 cursor-pointer touch-manipulation"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onCategoryClick && onCategoryClick(categoryName);
+                      }
+                    }}
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                       <div
-                        className="w-4 h-4 rounded-full flex-shrink-0"
+                        className="w-3 h-3 sm:w-4 sm:h-4 rounded-full flex-shrink-0"
                         style={{ backgroundColor: COLORS[colorIndex % COLORS.length] }}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm sm:text-base text-foreground truncate">
+                        <p className="font-semibold text-[11px] sm:text-xs md:text-sm text-foreground break-words leading-tight">
                           {categoryName}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
                           {percent}% do total
                         </p>
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className="font-bold text-base sm:text-lg text-primary">
+                    <div className="text-right flex-shrink-0 ml-2 sm:ml-4">
+                      <p className="font-bold text-[10px] sm:text-xs md:text-sm text-primary leading-tight">
                         {formatCurrency(item.amount)}
                       </p>
                     </div>
@@ -2357,10 +2386,10 @@ export default function Dashboard() {
               })}
               
               {/* Total */}
-              <div className="mt-4 pt-4 border-t border-border">
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-border">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-base sm:text-lg text-foreground">Total</span>
-                  <span className="font-bold text-lg sm:text-xl text-primary">
+                  <span className="font-bold text-sm sm:text-base md:text-lg text-foreground">Total</span>
+                  <span className="font-bold text-base sm:text-lg md:text-xl text-primary">
                     {formatCurrency(total)}
                   </span>
                 </div>
@@ -3724,7 +3753,7 @@ export default function Dashboard() {
           </div>
         </>
       ) : (
-        <div className="mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
           {/* Receitas por Categoria */}
           <RevenueCategoryChart
             data={revenueByCategory}
@@ -3732,6 +3761,15 @@ export default function Dashboard() {
             subtitle="Distribuição das receitas por categoria no período selecionado"
             chartRef={revenueCategoryChartRef}
             onCategoryClick={handleOpenRevenueDetails}
+          />
+
+          {/* Despesas por Categoria */}
+          <ExpenseCategoryChart
+            data={expensesByCategory}
+            title="Despesas por Categoria"
+            subtitle="Distribuição das despesas por categoria no período selecionado"
+            chartRef={expenseCategoryChartRef}
+            onCategoryClick={handleOpenExpenseDetails}
           />
         </div>
       )}
