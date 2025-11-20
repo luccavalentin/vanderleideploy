@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, FileText } from "lucide-react";
+import { Pencil, Trash2, FileText, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { standardizeText, handleStandardizeInput } from "@/lib/validations";
@@ -30,7 +30,7 @@ export default function Anotacoes() {
     content: "",
   });
 
-  const { data: notes } = useQuery({
+  const { data: notes, isLoading: notesLoading } = useQuery({
     queryKey: ["notes"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -40,7 +40,20 @@ export default function Anotacoes() {
       if (error) throw error;
       return data;
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
+
+  // Memoizar notas para evitar re-renders desnecessários
+  const sortedNotes = useMemo(() => {
+    if (!notes) return [];
+    return [...notes].sort((a, b) => {
+      // Ordenar: não concluídas primeiro, depois por data
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [notes]);
 
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
 
@@ -111,11 +124,11 @@ export default function Anotacoes() {
     },
   });
 
-  const handleDoubleClick = (note: any) => {
+  const handleDoubleClick = useCallback((note: any) => {
     const currentCompleted = note.completed ?? false;
     const newCompleted = !currentCompleted;
     toggleStrikethroughMutation.mutate({ id: note.id, completed: newCompleted });
-  };
+  }, [toggleStrikethroughMutation]);
 
   const handleSubmitAndNew = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,18 +298,31 @@ export default function Anotacoes() {
 
       <QuickActions />
 
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <StatsCard
           title="Total de Anotações"
           value={notes?.length?.toString() || "0"}
           icon={FileText}
           variant="default"
           onClick={() => setDetailsDialogOpen(true)}
+          className="cursor-pointer hover:scale-[1.02] transition-transform duration-200"
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-        {notes?.map((note, index) => (
+      {notesLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : sortedNotes.length === 0 ? (
+        <Card className="p-12 text-center border-2 border-dashed">
+          <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
+          <h3 className="text-lg font-semibold mb-2">Nenhuma anotação encontrada</h3>
+          <p className="text-muted-foreground mb-4">Comece criando sua primeira anotação</p>
+          <Button onClick={handleNewItem}>Criar Anotação</Button>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+        {sortedNotes.map((note, index) => (
           <Card 
             key={note.id} 
             className={`
@@ -362,7 +388,8 @@ export default function Anotacoes() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      )}
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
         if (!open) {
@@ -371,7 +398,7 @@ export default function Anotacoes() {
           setIsDialogOpen(true);
         }
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar Anotação" : "Nova Anotação"}</DialogTitle>
             <DialogDescription>

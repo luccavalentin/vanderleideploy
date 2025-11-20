@@ -56,7 +56,7 @@ export default function Despesas() {
     linked_source: "", // Vínculo com outras telas (Escritório, Gado, etc)
   });
 
-  const { data: expenses } = useQuery({
+  const { data: expenses, isLoading: expensesLoading } = useQuery({
     queryKey: ["expenses"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -65,10 +65,11 @@ export default function Despesas() {
       if (error) throw error;
       return data;
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   // Buscar receitas para calcular o saldo
-  const { data: revenues } = useQuery({
+  const { data: revenues, isLoading: revenuesLoading } = useQuery({
     queryKey: ["revenues"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -77,6 +78,7 @@ export default function Despesas() {
       if (error) throw error;
       return data;
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredExpenses, resultCount, totalCount } = useSmartSearch(

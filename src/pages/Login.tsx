@@ -141,8 +141,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-4">
-      <Card className="w-full max-w-md shadow-2xl border-2 border-primary/20">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-3 sm:p-4">
+      <Card className="w-full max-w-md shadow-2xl border-2 border-primary/20 animate-in fade-in-50 duration-300">
         <CardHeader className="space-y-1 text-center pb-6">
           <div className="flex justify-center mb-4">
             <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">

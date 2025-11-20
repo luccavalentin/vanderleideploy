@@ -47,7 +47,7 @@ export default function Leads() {
     notes: "",
   });
 
-  const { data: leads } = useQuery({
+  const { data: leads, isLoading: leadsLoading } = useQuery({
     queryKey: ["leads"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -56,6 +56,7 @@ export default function Leads() {
       if (error) throw error;
       return data;
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredLeads, resultCount, totalCount } = useSmartSearch(

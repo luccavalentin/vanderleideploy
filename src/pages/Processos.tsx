@@ -85,7 +85,7 @@ export default function Processos() {
     type: "person",
   });
 
-  const { data: processes } = useQuery({
+  const { data: processes, isLoading: processesLoading } = useQuery({
     queryKey: ["legal_processes"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -95,6 +95,7 @@ export default function Processos() {
       if (error) throw error;
       return data;
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredProcesses, resultCount, totalCount } = useSmartSearch(

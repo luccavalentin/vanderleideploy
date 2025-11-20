@@ -8,44 +8,64 @@ if (typeof document !== "undefined") {
   document.documentElement.setAttribute("lang", "pt-BR");
 }
 
-// Registrar Service Worker para PWA
+// Registrar Service Worker para PWA (defer para não bloquear renderização)
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
+  // Usar requestIdleCallback para não bloquear renderização inicial
+  const registerSW = () => {
     navigator.serviceWorker
       .register("/service-worker.js", { updateViaCache: "none" })
       .then((registration) => {
-        console.log("✅ Service Worker registrado com sucesso:", registration.scope);
-        
-        // Força atualização imediata
-        registration.update();
+        // Log apenas em desenvolvimento
+        if (import.meta.env.DEV) {
+          console.log("✅ Service Worker registrado:", registration.scope);
+        }
         
         // Verifica atualizações do service worker
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener("statechange", () => {
-              if (newWorker.state === "installed") {
-                if (navigator.serviceWorker.controller) {
-                  console.log("🔄 Nova versão do Service Worker disponível!");
-                  // Força reload para usar nova versão
-                  window.location.reload();
-                } else {
-                  console.log("✅ Service Worker instalado pela primeira vez");
+              if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                // Nova versão disponível - atualizar em background
+                if (import.meta.env.DEV) {
+                  console.log("🔄 Nova versão do Service Worker disponível");
                 }
               }
             });
           }
         });
-        
-        // Verifica atualizações periodicamente
-        setInterval(() => {
-          registration.update();
-        }, 60000); // A cada 1 minuto
       })
       .catch((error) => {
-        console.error("❌ Falha ao registrar Service Worker:", error);
+        // Silenciar erros de SW em produção
+        if (import.meta.env.DEV) {
+          console.error("❌ Falha ao registrar Service Worker:", error);
+        }
       });
-  });
+  };
+
+  // Registrar após carregamento completo ou em idle time
+  if (document.readyState === 'complete') {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(registerSW, { timeout: 2000 });
+    } else {
+      setTimeout(registerSW, 1000);
+    }
+  } else {
+    window.addEventListener("load", () => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(registerSW, { timeout: 2000 });
+      } else {
+        setTimeout(registerSW, 1000);
+      }
+    });
+  }
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+// Renderização otimizada
+const rootElement = document.getElementById("root");
+if (rootElement) {
+  const root = createRoot(rootElement);
+  root.render(<App />);
+} else {
+  console.error("Root element not found");
+}

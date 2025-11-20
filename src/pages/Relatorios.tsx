@@ -85,7 +85,7 @@ export default function Relatorios() {
   const [propertiesDialogOpen, setPropertiesDialogOpen] = useState(false);
 
   // Receitas por mês
-  const { data: revenueByMonth } = useQuery({
+  const { data: revenueByMonth, isLoading: revenueByMonthLoading } = useQuery({
     queryKey: ["revenue-by-month"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -105,6 +105,7 @@ export default function Relatorios() {
         amount: Number(amount)
       })).sort((a, b) => a.month.localeCompare(b.month));
     },
+    staleTime: 60000, // Cache por 1 minuto
   });
 
   // Despesas por mês
@@ -128,6 +129,7 @@ export default function Relatorios() {
         amount: Number(amount)
       })).sort((a, b) => a.month.localeCompare(b.month));
     },
+    staleTime: 60000, // Cache por 1 minuto
   });
 
   // Receitas vs Despesas - ordenado por data
@@ -164,7 +166,8 @@ export default function Relatorios() {
         return parseMonth(a.month).getTime() - parseMonth(b.month).getTime();
       });
     },
-    enabled: !!revenueByMonth && !!expensesByMonth
+    enabled: !!revenueByMonth && !!expensesByMonth,
+    staleTime: 60000, // Cache por 1 minuto
   });
 
   // Receitas por categoria
@@ -188,6 +191,7 @@ export default function Relatorios() {
         amount: Number(amount)
       })).sort((a, b) => b.amount - a.amount);
     },
+    staleTime: 60000, // Cache por 1 minuto
   });
 
   // Despesas por categoria

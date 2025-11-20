@@ -16,7 +16,7 @@ import { useTableSort } from "@/hooks/useTableSort";
 import { useSmartSearch } from "@/hooks/useSmartSearch";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2, Users, Download, Mail, Building2, User, FileText, CheckCircle2 } from "lucide-react";
+import { Pencil, Trash2, Users, Download, Mail, Building2, User, FileText, CheckCircle2, Loader2 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { StatsCard } from "@/components/layout/StatsCard";
@@ -83,6 +83,7 @@ export default function Clientes() {
     },
     retry: 2,
     retryDelay: 1000,
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredClients, resultCount, totalCount } = useSmartSearch(
@@ -464,7 +465,7 @@ const handleEdit = (client: any) => {
       />
 
       {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <StatsCard
           title="Total de Clientes"
           value={stats.total}
@@ -508,8 +509,8 @@ const handleEdit = (client: any) => {
       </div>
 
       {/* Filtros e Busca */}
-      <Card className="mb-6 border-2 border-border/50 rounded-2xl shadow-elegant-lg bg-gradient-to-br from-card to-card/95">
-        <CardContent className="p-5 sm:p-6">
+      <Card className="mb-4 sm:mb-6 border-2 border-border/50 rounded-2xl shadow-elegant-lg bg-gradient-to-br from-card to-card/95">
+        <CardContent className="p-3 sm:p-4 md:p-5 lg:p-6">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div className="flex-1 w-full">
@@ -610,10 +611,8 @@ const handleEdit = (client: any) => {
             {clientsLoading ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-12 text-muted-foreground/70 border-0">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
-                      <Users className="w-8 h-8 text-muted-foreground animate-pulse" />
-                    </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     <span className="font-medium">Carregando clientes...</span>
                   </div>
                 </TableCell>

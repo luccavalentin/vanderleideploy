@@ -35,6 +35,7 @@ export default function BusinessGrowth() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { data: revenueIdeas = [] } = useQuery({
@@ -47,6 +48,7 @@ export default function BusinessGrowth() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { data: plans = [] } = useQuery({
@@ -59,6 +61,7 @@ export default function BusinessGrowth() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const stats = useMemo(() => {

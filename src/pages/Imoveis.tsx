@@ -97,13 +97,14 @@ export default function Imoveis() {
 
   const [isLoadingCEP, setIsLoadingCEP] = useState(false);
 
-  const { data: properties } = useQuery({
+  const { data: properties, isLoading: propertiesLoading } = useQuery({
     queryKey: ["properties"],
     queryFn: async () => {
       const { data, error } = await supabase.from("properties").select("*");
       if (error) throw error;
       return data;
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const {

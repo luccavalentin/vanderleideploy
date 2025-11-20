@@ -86,6 +86,7 @@ export default function Aplicacoes() {
       }
     },
     retry: false,
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   // Verifica se a tabela não existe (erro 404)

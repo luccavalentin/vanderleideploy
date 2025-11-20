@@ -25,7 +25,7 @@ import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -33,23 +33,22 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+// Menu items reorganizados conforme solicitado
 const menuItems = [
-  { icon: PiggyBank, label: "Aplicações", path: "/aplicacoes" },
-  { icon: NotebookPen, label: "Anotações", path: "/anotacoes" },
+  { icon: Scale, label: "Escritórios e Processos", path: "/processos" },
   { icon: UserCircle, label: "Clientes", path: "/clientes" },
   { icon: PawPrint, label: "Gado", path: "/gado" },
   { icon: Building2, label: "Imóveis", path: "/imoveis" },
   { icon: FileCheck, label: "Leads", path: "/leads" },
-  { icon: Scale, label: "Escritórios e Processos", path: "/processos" },
-  { icon: CheckSquare, label: "Tarefas", path: "/tarefas" },
-  { icon: Wallet, label: "Empréstimos", path: "/emprestimos" },
-  // { icon: Settings, label: "Funções Avançadas", path: "/funcoes-avancadas" },
+  { icon: NotebookPen, label: "Anotações", path: "/anotacoes" },
 ];
 
 const financeiroSubItems = [
   { icon: TrendingUp, label: "Cadastrar Receita", path: "/receitas" },
   { icon: TrendingDown, label: "Cadastrar Despesa", path: "/despesas" },
   { icon: Receipt, label: "Faturamento", path: "/faturamento" },
+  { icon: Wallet, label: "Empréstimos", path: "/emprestimos" },
+  { icon: PiggyBank, label: "Aplicações", path: "/aplicacoes" },
 ];
 
 const crescimentoSubItems = [
@@ -66,8 +65,8 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Handler para logout
-  const handleLogout = async () => {
+  // Handler para logout - memoizado para evitar re-renders
+  const handleLogout = useCallback(async () => {
     try {
       // Limpa sessão do Supabase
       await supabase.auth.signOut();
@@ -97,10 +96,13 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
         variant: "destructive",
       });
     }
-  };
+  }, [navigate, toast, onNavigate]);
 
   // Verifica se algum subitem está ativo para destacar o menu pai
-  const isFinanceiroActive = financeiroSubItems.some(item => location.pathname === item.path);
+  // Incluir Empréstimos e Aplicações no check do Financeiro
+  const isFinanceiroActive = financeiroSubItems.some(item => location.pathname === item.path) ||
+                             location.pathname === "/emprestimos" ||
+                             location.pathname === "/aplicacoes";
   const isCrescimentoActive = crescimentoSubItems.some(item => location.pathname === item.path) || location.pathname === "/crescimento-negocios";
 
   // Abre automaticamente se algum subitem estiver ativo
@@ -117,7 +119,9 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
 
   // Limpa o destaque quando navega para um menu que não é do "Meu Financeiro"
   useEffect(() => {
-    const isFinanceiroRoute = financeiroSubItems.some(item => location.pathname === item.path);
+    const isFinanceiroRoute = financeiroSubItems.some(item => location.pathname === item.path) ||
+                              location.pathname === "/emprestimos" ||
+                              location.pathname === "/aplicacoes";
     if (!isFinanceiroRoute && !isFinanceiroOpen) {
       setIsFinanceiroClicked(false);
     }
@@ -181,6 +185,7 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
         
         <nav className="flex-1 overflow-y-auto p-4 sidebar-nav-desktop">
           <ul className="space-y-1.5">
+            {/* 1. Dashboard */}
             <li>
               <NavLink
                 to="/"
@@ -195,6 +200,20 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
               </NavLink>
             </li>
 
+            {/* 2. Tarefas */}
+            <li>
+              <NavLink
+                to="/tarefas"
+                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                onClick={onNavigate}
+              >
+                <CheckSquare className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                <span className="whitespace-nowrap">Tarefas</span>
+              </NavLink>
+            </li>
+
+            {/* 3. Meu Financeiro */}
             <li>
               <Collapsible open={isFinanceiroOpen} onOpenChange={setIsFinanceiroOpen}>
                 <CollapsibleTrigger
@@ -231,6 +250,72 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
               </Collapsible>
             </li>
 
+            {/* 4. Escritórios e Processos */}
+            <li>
+              <NavLink
+                to="/processos"
+                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                onClick={onNavigate}
+              >
+                <Scale className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                <span className="whitespace-nowrap">Escritórios e Processos</span>
+              </NavLink>
+            </li>
+
+            {/* 5. Clientes */}
+            <li>
+              <NavLink
+                to="/clientes"
+                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                onClick={onNavigate}
+              >
+                <UserCircle className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                <span className="whitespace-nowrap">Clientes</span>
+              </NavLink>
+            </li>
+
+            {/* 6. Gado */}
+            <li>
+              <NavLink
+                to="/gado"
+                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                onClick={onNavigate}
+              >
+                <PawPrint className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                <span className="whitespace-nowrap">Gado</span>
+              </NavLink>
+            </li>
+
+            {/* 7. Imóveis */}
+            <li>
+              <NavLink
+                to="/imoveis"
+                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                onClick={onNavigate}
+              >
+                <Building2 className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                <span className="whitespace-nowrap">Imóveis</span>
+              </NavLink>
+            </li>
+
+            {/* 8. Leads */}
+            <li>
+              <NavLink
+                to="/leads"
+                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                onClick={onNavigate}
+              >
+                <FileCheck className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                <span className="whitespace-nowrap">Leads</span>
+              </NavLink>
+            </li>
+
+            {/* 9. Crescimento dos Negócios */}
             <li>
               <Collapsible open={isCrescimentoOpen} onOpenChange={setIsCrescimentoOpen}>
                 <CollapsibleTrigger
@@ -278,22 +363,7 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
               </Collapsible>
             </li>
 
-            {menuItems
-              .filter(item => item.path !== "/" && item.path !== "/relatorios" && item.path !== "/funcoes-avancadas")
-              .map((item) => (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
-                    activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
-                    onClick={onNavigate}
-                  >
-                    <item.icon className="w-5 h-5 icon-professional" strokeWidth={2.5} />
-                    <span className="whitespace-nowrap">{item.label}</span>
-                  </NavLink>
-                </li>
-              ))}
-
+            {/* 10. Relatórios */}
             <li>
               <NavLink
                 to="/relatorios"
@@ -303,6 +373,19 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
               >
                 <BarChart3 className="w-5 h-5 icon-professional" strokeWidth={2.5} />
                 <span className="whitespace-nowrap">Relatórios</span>
+              </NavLink>
+            </li>
+
+            {/* Anotações - mantido mas não mencionado */}
+            <li>
+              <NavLink
+                to="/anotacoes"
+                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                onClick={onNavigate}
+              >
+                <NotebookPen className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                <span className="whitespace-nowrap">Anotações</span>
               </NavLink>
             </li>
           </ul>

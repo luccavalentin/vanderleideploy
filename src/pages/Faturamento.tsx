@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronRight, ChevronLeft, X, RotateCcw } from "lucide-react";
+import { ChevronRight, ChevronLeft, X, RotateCcw, Loader2 } from "lucide-react";
+import { TableSkeleton } from "@/components/ui/PageLoader";
 
 export default function Faturamento() {
   const [currentPage, setCurrentPage] = useState(0); // Página atual (0 = primeiros 10 meses)
@@ -53,10 +54,11 @@ export default function Faturamento() {
       return failureCount < 2;
     },
     retryDelay: 1000,
-    staleTime: 60000, // Cache por 1 minuto para melhor performance
+    staleTime: 120000, // Cache por 2 minutos para melhor performance
     refetchOnMount: false, // Não refetch ao montar se dados estão frescos
     refetchOnWindowFocus: false, // Não refetch ao focar na janela
-    refetchOnReconnect: true, // Refetch ao reconectar
+    refetchOnReconnect: false, // Não refetch ao reconectar (dados já estão em cache)
+    gcTime: 300000, // Manter em cache por 5 minutos
   });
 
   // Gerar todos os meses disponíveis, cobrindo do menor ao maior mês das receitas
@@ -79,9 +81,9 @@ export default function Faturamento() {
     let maxDate = new Date(currentMonth);
     let hasValidDate = false;
 
-    // Limitar o range para evitar cálculos excessivos (máximo 5 anos para frente e 2 anos para trás)
-    const maxFutureDate = new Date(today.getFullYear() + 5, today.getMonth(), 1);
-    const maxPastDate = new Date(today.getFullYear() - 2, today.getMonth(), 1);
+    // Limitar o range para evitar cálculos excessivos (máximo 3 anos para frente e 1 ano para trás)
+    const maxFutureDate = new Date(today.getFullYear() + 3, today.getMonth(), 1);
+    const maxPastDate = new Date(today.getFullYear() - 1, today.getMonth(), 1);
 
     // Processar receitas de forma otimizada
     for (let i = 0; i < consolidatedRevenues.length; i++) {
@@ -139,7 +141,7 @@ export default function Faturamento() {
     // Gerar lista de meses entre minDate e maxDate (limitado)
     const monthsList = [];
     let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-    const maxMonths = 120; // Limitar a 120 meses (10 anos) para evitar loops infinitos
+    const maxMonths = 60; // Limitar a 60 meses (5 anos) para melhor performance
     let monthCount = 0;
     
     while (current <= maxDate && monthCount < maxMonths) {
@@ -210,7 +212,8 @@ export default function Faturamento() {
   };
 
   // Função para gerar parcelas futuras baseadas na periodicidade
-  const generateInstallments = (revenue: any, allMonthsList: any[]) => {
+  // Memoizada com useCallback para evitar recriação desnecessária
+  const generateInstallments = useCallback((revenue: any, allMonthsList: any[]) => {
     // Usar Map para evitar duplicatas de monthKey
     const installmentsMap = new Map<string, number>();
     const frequency = (revenue.frequency || "Única").toString();
@@ -351,58 +354,84 @@ export default function Faturamento() {
       monthKey,
       amount,
     }));
-  };
+  }, []);
+
+  // Estado para controlar processamento assíncrono
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [billingData, setBillingData] = useState<Array<{category: string; monthlyData: Record<string, number>; total: number}>>([]);
 
   // Processar receitas consolidadas agrupadas por categoria e mês
-  // Otimizado para melhor performance com memoização adequada
-  const billingData = useMemo(() => {
-    // Se ainda está carregando ou não há receitas, retornar array vazio
+  // Otimizado com processamento assíncrono para não bloquear UI
+  useEffect(() => {
+    // Se ainda está carregando ou não há receitas, limpar dados
     if (revenuesLoading || !consolidatedRevenues || consolidatedRevenues.length === 0 || allMonths.length === 0) {
-      return [];
+      setBillingData([]);
+      setIsProcessing(false);
+      return;
     }
 
-    // Agrupar receitas por categoria
-    const byCategory: Record<string, Record<string, number>> = {};
+    setIsProcessing(true);
     
-    // Criar mapa de meses uma vez para melhor performance
-    const monthsMap = new Map(allMonths.map(m => [m.key, true]));
+    // Processar em chunks assíncronos para não bloquear UI
+    const processBillingData = async () => {
+      // Agrupar receitas por categoria
+      const byCategory: Record<string, Record<string, number>> = {};
+      
+      // Criar mapa de meses uma vez para melhor performance
+      const monthsMap = new Map(allMonths.map(m => [m.key, true]));
 
-    // Processar receitas de forma otimizada
-    // Limitar processamento para evitar lag (máximo 1000 receitas por vez)
-    const maxRevenues = Math.min(consolidatedRevenues.length, 1000);
-    
-    for (let i = 0; i < maxRevenues; i++) {
-      const revenue = consolidatedRevenues[i];
-      const category = revenue.category || "Sem Categoria";
+      // Processar receitas em chunks de 50 para não bloquear
+      const CHUNK_SIZE = 50;
+      const maxRevenues = Math.min(consolidatedRevenues.length, 500); // Limitar a 500 receitas
       
-      // Gerar todas as parcelas para esta receita usando allMonths
-      const installments = generateInstallments(revenue, allMonths);
-      
-      // Inicializar categoria se necessário
-      if (!byCategory[category]) {
-        byCategory[category] = {};
-      }
-      
-      // Processar parcelas
-      for (let j = 0; j < installments.length; j++) {
-        const { monthKey, amount } = installments[j];
-        // Só processar se o mês está na lista de meses disponíveis
-        if (monthsMap.has(monthKey)) {
-          byCategory[category][monthKey] = (byCategory[category][monthKey] || 0) + amount;
+      for (let chunkStart = 0; chunkStart < maxRevenues; chunkStart += CHUNK_SIZE) {
+        const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, maxRevenues);
+        
+        // Processar chunk
+        for (let i = chunkStart; i < chunkEnd; i++) {
+          const revenue = consolidatedRevenues[i];
+          const category = revenue.category || "Sem Categoria";
+          
+          // Gerar todas as parcelas para esta receita usando allMonths
+          const installments = generateInstallments(revenue, allMonths);
+          
+          // Inicializar categoria se necessário
+          if (!byCategory[category]) {
+            byCategory[category] = {};
+          }
+          
+          // Processar parcelas
+          for (let j = 0; j < installments.length; j++) {
+            const { monthKey, amount } = installments[j];
+            // Só processar se o mês está na lista de meses disponíveis
+            if (monthsMap.has(monthKey)) {
+              byCategory[category][monthKey] = (byCategory[category][monthKey] || 0) + amount;
+            }
+          }
+        }
+        
+        // Yield para UI entre chunks (permitir renderização)
+        if (chunkEnd < maxRevenues) {
+          await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
-    }
 
-    // Converter para array de dados
-    return Object.entries(byCategory).map(([category, monthlyData]) => {
-      const total = Object.values(monthlyData).reduce((sum, val) => sum + val, 0);
-      return {
-        category,
-        monthlyData,
-        total,
-      };
-    });
-  }, [consolidatedRevenues, allMonths, revenuesLoading]);
+      // Converter para array de dados
+      const result = Object.entries(byCategory).map(([category, monthlyData]) => {
+        const total = Object.values(monthlyData).reduce((sum, val) => sum + val, 0);
+        return {
+          category,
+          monthlyData,
+          total,
+        };
+      });
+      
+      setBillingData(result);
+      setIsProcessing(false);
+    };
+
+    processBillingData();
+  }, [consolidatedRevenues, allMonths, revenuesLoading, generateInstallments]);
 
   // Calcular totais por mês (apenas para os meses da página atual)
   const monthlyTotals = useMemo(() => {
@@ -492,16 +521,21 @@ export default function Faturamento() {
       {/* Mobile: Cards verticais | Desktop: Tabela */}
       {isMobile ? (
         <div className="space-y-4">
-          {revenuesLoading ? (
+          {revenuesLoading || isProcessing ? (
             <Card className="p-8 text-center">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
-                  <span className="text-2xl animate-pulse">📊</span>
-                </div>
-                <span className="font-medium text-muted-foreground">Carregando faturamento...</span>
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="font-medium text-muted-foreground">
+                  {revenuesLoading ? "Carregando receitas..." : "Processando faturamento..."}
+                </span>
+                {!revenuesLoading && consolidatedRevenues?.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Processando {consolidatedRevenues.length} receita(s)...
+                  </span>
+                )}
               </div>
             </Card>
-          ) : billingData.length === 0 && !revenuesLoading ? (
+          ) : billingData.length === 0 && !revenuesLoading && !isProcessing ? (
             <Card className="p-8 text-center">
               <div className="flex flex-col items-center gap-2">
                 <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
@@ -608,18 +642,22 @@ export default function Faturamento() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {revenuesLoading ? (
+              {revenuesLoading || isProcessing ? (
                 <TableRow>
                   <TableCell colSpan={months.length + 2} className="text-center py-12 text-muted-foreground/70 text-xs sm:text-sm border-0">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
-                        <span className="text-2xl animate-pulse">📊</span>
-                      </div>
-                      <span className="font-medium">Carregando faturamento...</span>
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      <span className="font-medium">
+                        {revenuesLoading ? "Carregando receitas..." : "Processando faturamento..."}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {!revenuesLoading && consolidatedRevenues?.length > 0 && 
+                          `Processando ${consolidatedRevenues.length} receita(s)...`}
+                      </span>
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : billingData.length === 0 && !revenuesLoading ? (
+              ) : billingData.length === 0 && !revenuesLoading && !isProcessing ? (
                 <TableRow>
                   <TableCell colSpan={months.length + 2} className="text-center py-12 text-muted-foreground/70 text-xs sm:text-sm border-0">
                     <div className="flex flex-col items-center gap-2">

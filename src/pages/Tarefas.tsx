@@ -122,6 +122,7 @@ export default function Tarefas() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -208,6 +209,7 @@ export default function Tarefas() {
       }
     },
     retry: false,
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   // Definitions that depend on tasks
@@ -1138,7 +1140,8 @@ export default function Tarefas() {
             <span className="font-medium text-muted-foreground mt-2">Nenhuma tarefa encontrada</span>
           </Card>
         ) : (
-          sortedTasks?.map((task: any) => {
+          <>
+            {sortedTasks?.map((task: any) => {
             const status = getTaskStatus(task);
             const priority = getTaskPriority(task);
             const overdue = isOverdue(task.due_date);
@@ -1157,117 +1160,125 @@ export default function Tarefas() {
             else if (status === "em_andamento") bgGradient = "bg-gradient-to-br from-primary/10 via-background to-white";
             else if (status === "pendente") bgGradient = "bg-gradient-to-br from-warning/10 via-background to-white";
 
-            // Estado para dialog de exclusão individual
-            const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-
             return (
-              <>
-                <Card
-                  key={task.id}
-                  className={`border-2 ${borderColor} shadow-elegant hover:shadow-elegant-lg transition-all duration-300 ${bgGradient} cursor-pointer hover:scale-[1.03] active:scale-[0.98] rounded-xl ${status === "concluida" ? "opacity-60" : ""}`}
-                  onClick={() => handleEdit(task)}
-                >
-                  <CardContent className="p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className={`font-bold text-lg truncate ${status === "concluida" ? "line-through" : ""}`}>{task.title}</span>
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => handleToggleSelectTask(task.id)}
-                        onClick={(e) => e.stopPropagation()}
+              <Card
+                key={task.id}
+                className={`border-2 ${borderColor} shadow-elegant hover:shadow-elegant-lg transition-all duration-300 ${bgGradient} cursor-pointer hover:scale-[1.03] active:scale-[0.98] rounded-xl ${status === "concluida" ? "opacity-60" : ""}`}
+                onClick={() => handleEdit(task)}
+              >
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className={`font-bold text-lg truncate ${status === "concluida" ? "line-through" : ""}`}>{task.title}</span>
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => handleToggleSelectTask(task.id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <Badge className={`text-xs ${statusColors[status]}`}>{statusLabels[status]}</Badge>
+                    <Badge className={`text-xs ${priorityColors[priority]}`}>{priorityLabels[priority]}</Badge>
+                    {overdue && <Badge className="text-xs bg-destructive/20 text-destructive">Atrasada</Badge>}
+                    {task.category && <Badge variant="outline" className="text-xs">{task.category}</Badge>}
+                    {task.recurrence_type && (
+                      <Badge variant="outline" className="capitalize text-xs">
+                        {task.recurrence_type === "diaria" && "Diária"}
+                        {task.recurrence_type === "semanal" && "Semanal"}
+                        {task.recurrence_type === "mensal" && "Mensal"}
+                        {task.recurrence_type === "anual" && "Anual"}
+                        {task.recurrence_type === "personalizada" && "Personalizada"}
+                        {task.recurrence_interval > 1 && ` (a cada ${task.recurrence_interval})`}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {task.description || "-"}
+                  </div>
+                  {/* Exibir Checklist se houver */}
+                  {task.use_checklist && task.task_checklist_items && task.task_checklist_items.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border/30">
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">Checklist:</p>
+                      <div className="space-y-1.5">
+                        {task.task_checklist_items
+                          .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+                          .map((item: any, idx: number) => (
+                          <div key={item.id || idx} className="flex items-center gap-2 text-xs">
+                            <Checkbox
+                              checked={item.completed || false}
+                              onCheckedChange={(checked) => {
+                                if (item.id) {
+                                  toggleChecklistItemMutation.mutate({
+                                    itemId: item.id,
+                                    completed: checked as boolean,
+                                  });
+                                }
+                              }}
+                              className="h-3.5 w-3.5"
+                            />
+                            <span className={item.completed ? "line-through text-muted-foreground" : ""}>
+                              {item.text}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mt-2">
+                    <span className={`text-xs font-medium ${overdue ? "text-destructive" : ""}`}>
+                      Vencimento: {task.due_date ? format(new Date(task.due_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
+                    </span>
+                    <div className="flex gap-1">
+                      <IconButton
+                        icon={Pencil}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(task);
+                        }}
+                        variant="edit"
+                      />
+                      <IconButton
+                        icon={Trash2}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTaskToDelete(task.id);
+                        }}
+                        variant="delete"
                       />
                     </div>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      <Badge className={`text-xs ${statusColors[status]}`}>{statusLabels[status]}</Badge>
-                      <Badge className={`text-xs ${priorityColors[priority]}`}>{priorityLabels[priority]}</Badge>
-                      {overdue && <Badge className="text-xs bg-destructive/20 text-destructive">Atrasada</Badge>}
-                      {task.category && <Badge variant="outline" className="text-xs">{task.category}</Badge>}
-                      {task.recurrence_type && (
-                        <Badge variant="outline" className="capitalize text-xs">
-                          {task.recurrence_type === "diaria" && "Diária"}
-                          {task.recurrence_type === "semanal" && "Semanal"}
-                          {task.recurrence_type === "mensal" && "Mensal"}
-                          {task.recurrence_type === "anual" && "Anual"}
-                          {task.recurrence_type === "personalizada" && "Personalizada"}
-                          {task.recurrence_interval > 1 && ` (a cada ${task.recurrence_interval})`}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground truncate">
-                      {task.description || "-"}
-                    </div>
-                    {/* Exibir Checklist se houver */}
-                    {task.use_checklist && task.task_checklist_items && task.task_checklist_items.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-border/30">
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">Checklist:</p>
-                        <div className="space-y-1.5">
-                          {task.task_checklist_items
-                            .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
-                            .map((item: any, idx: number) => (
-                            <div key={item.id || idx} className="flex items-center gap-2 text-xs">
-                              <Checkbox
-                                checked={item.completed || false}
-                                onCheckedChange={(checked) => {
-                                  if (item.id) {
-                                    toggleChecklistItemMutation.mutate({
-                                      itemId: item.id,
-                                      completed: checked as boolean,
-                                    });
-                                  }
-                                }}
-                                className="h-3.5 w-3.5"
-                              />
-                              <span className={item.completed ? "line-through text-muted-foreground" : ""}>
-                                {item.text}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between mt-2">
-                      <span className={`text-xs font-medium ${overdue ? "text-destructive" : ""}`}>
-                        Vencimento: {task.due_date ? format(new Date(task.due_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
-                      </span>
-                      <div className="flex gap-1">
-                        <IconButton
-                          icon={Pencil}
-                          onClick={handleEdit.bind(null, task)}
-                          variant="edit"
-                        />
-                        <IconButton
-                          icon={Trash2}
-                          onClick={() => setDeleteDialogOpen(true)}
-                          variant="delete"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                {/* Dialog de confirmação de exclusão individual */}
-                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir Tarefa</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteMutation.mutate(task.id)}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </>
+                  </div>
+                </CardContent>
+              </Card>
             );
-          })
+            })}
+          </>
         )}
       </div>
+
+      {/* Dialog de confirmação de exclusão individual */}
+      <AlertDialog open={taskToDelete !== null} onOpenChange={(open) => !open && setTaskToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Tarefa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (taskToDelete) {
+                  deleteMutation.mutate(taskToDelete);
+                  setTaskToDelete(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog de Criação/Edição */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {

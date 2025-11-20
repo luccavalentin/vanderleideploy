@@ -64,7 +64,7 @@ export default function Emprestimos() {
     first_installment_date: "",
   });
 
-  const { data: loans } = useQuery({
+  const { data: loans, isLoading: loansLoading } = useQuery({
     queryKey: ["loans"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -73,6 +73,7 @@ export default function Emprestimos() {
       if (error) throw error;
       return data;
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredLoans, resultCount, totalCount } = useSmartSearch(

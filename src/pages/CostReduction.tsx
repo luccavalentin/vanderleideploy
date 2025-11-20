@@ -78,6 +78,7 @@ export default function CostReduction() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { data: plans = [] } = useQuery({
@@ -91,6 +92,7 @@ export default function CostReduction() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredIdeas } = useSmartSearch(

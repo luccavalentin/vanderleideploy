@@ -73,6 +73,7 @@ export default function Gado() {
     },
     retry: 2,
     retryDelay: 1000,
+    staleTime: 30000, // Cache por 30 segundos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredCattle, resultCount, totalCount } = useSmartSearch(
