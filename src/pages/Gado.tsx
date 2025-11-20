@@ -42,10 +42,10 @@ export default function Gado() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Preço do @ (arroba) - padrão R$ 347.000,00, pode ser alterado
+  // Preço do @ (arroba) - padrão R$ 305,00, pode ser alterado
   const [arrobaPrice, setArrobaPrice] = useState<number>(() => {
     const saved = localStorage.getItem('cattle_arroba_price');
-    return saved ? parseFloat(saved) : 347000;
+    return saved ? parseFloat(saved) : 305;
   });
 
   const [formData, setFormData] = useState({
@@ -999,8 +999,8 @@ export default function Gado() {
                 type="number"
                 step="1000"
                 value={arrobaPrice}
-                onChange={(e) => setArrobaPrice(parseFloat(e.target.value) || 347000)}
-                placeholder="347000"
+                onChange={(e) => setArrobaPrice(parseFloat(e.target.value) || 305)}
+                placeholder="305"
               />
               <p className="text-xs text-muted-foreground">
                 Preço atual: {formatCurrency(arrobaPrice)} por @

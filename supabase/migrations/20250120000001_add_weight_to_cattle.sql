@@ -7,5 +7,5 @@ ALTER TABLE public.cattle
 ADD COLUMN IF NOT EXISTS weight DECIMAL(10, 2);
 
 -- Adicionar comentário na coluna para documentação
-COMMENT ON COLUMN public.cattle.weight IS 'Peso do gado em quilogramas (kg). Usado para cálculo de valor por @ (arroba). 1 @ = 15 kg = R$ 347.000,00';
+COMMENT ON COLUMN public.cattle.weight IS 'Peso do gado em quilogramas (kg). Usado para cálculo de valor por @ (arroba). 1 @ = 15 kg = R$ 305,00';
 
