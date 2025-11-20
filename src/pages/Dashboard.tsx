@@ -82,6 +82,8 @@ export default function Dashboard() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [detailsPeriod, setDetailsPeriod] = useState<"period1" | "period2" | null>(null);
   const [detailsType, setDetailsType] = useState<"revenue" | "expense" | null>(null);
+  const [categoryDetailsDialogOpen, setCategoryDetailsDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<{ category: string; type: "revenue" | "expense" } | null>(null);
   const [comparisonPeriod1, setComparisonPeriod1] = useState<{ dateRange?: { from: Date | undefined; to: Date | undefined }; month?: string; year?: string }>({
     dateRange: { from: undefined, to: undefined },
     month: getCurrentMonthKey().split('-')[1],
@@ -1996,11 +1998,12 @@ export default function Dashboard() {
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))'];
 
   // Componente auxiliar para gráfico de Receitas por Categoria
-  const RevenueCategoryChart = ({ data, title, subtitle, chartRef }: { 
+  const RevenueCategoryChart = ({ data, title, subtitle, chartRef, onCategoryClick }: { 
     data: any[] | undefined, 
     title: string, 
     subtitle?: string,
-    chartRef?: React.MutableRefObject<HTMLDivElement | null>
+    chartRef?: React.MutableRefObject<HTMLDivElement | null>,
+    onCategoryClick?: (category: string) => void
   }) => {
     if (!data || data.length === 0) {
       return (
@@ -2154,11 +2157,12 @@ export default function Dashboard() {
   };
 
   // Componente auxiliar para gráfico de Despesas por Categoria - EXATAMENTE IGUAL AO DE RECEITAS
-  const ExpenseCategoryChart = ({ data, title, subtitle, chartRef }: { 
+  const ExpenseCategoryChart = ({ data, title, subtitle, chartRef, onCategoryClick }: { 
     data: any[] | undefined, 
     title: string, 
     subtitle?: string,
-    chartRef?: React.MutableRefObject<HTMLDivElement | null>
+    chartRef?: React.MutableRefObject<HTMLDivElement | null>,
+    onCategoryClick?: (category: string) => void
   }) => {
     if (!data || data.length === 0) {
       return (
@@ -3643,55 +3647,33 @@ export default function Dashboard() {
       {comparisonMode ? (
         <>
           {/* Período 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
+          <div className="mb-6">
             <RevenueCategoryChart
               data={comparisonRevenueByCategory1}
               title="Receitas por Categoria - Período 1"
               subtitle="Distribuição das receitas por categoria no primeiro período"
               chartRef={comparisonRevenueCategoryChartRef1}
             />
-
-            <ExpenseCategoryChart
-              data={comparisonExpensesByCategory1}
-              title="Despesas por Categoria - Período 1"
-              subtitle="Distribuição das despesas por categoria no primeiro período"
-              chartRef={comparisonExpenseCategoryChartRef1}
-            />
-              </div>
+          </div>
 
           {/* Período 2 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
+          <div className="mb-6">
             <RevenueCategoryChart
               data={comparisonRevenueByCategory2}
               title="Receitas por Categoria - Período 2"
               subtitle="Distribuição das receitas por categoria no segundo período"
               chartRef={comparisonRevenueCategoryChartRef2}
             />
-
-            <ExpenseCategoryChart
-              data={comparisonExpensesByCategory2}
-              title="Despesas por Categoria - Período 2"
-              subtitle="Distribuição das despesas por categoria no segundo período"
-              chartRef={comparisonExpenseCategoryChartRef2}
-            />
           </div>
         </>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
+        <div className="mb-6">
           {/* Receitas por Categoria */}
           <RevenueCategoryChart
             data={revenueByCategory}
             title="Receitas por Categoria"
             subtitle="Distribuição das receitas por categoria no período selecionado"
             chartRef={revenueCategoryChartRef}
-          />
-
-          {/* Despesas por Categoria */}
-          <ExpenseCategoryChart
-            data={expensesByCategory}
-            title="Despesas por Categoria"
-            subtitle="Distribuição das despesas por categoria no período selecionado"
-            chartRef={expenseCategoryChartRef}
           />
         </div>
       )}
