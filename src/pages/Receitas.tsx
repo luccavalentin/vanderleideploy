@@ -94,7 +94,7 @@ export default function Receitas() {
 
   const { searchTerm, setSearchTerm, filteredData: filteredRevenues, resultCount, totalCount } = useSmartSearch(
     revenues,
-    ["description", "category", "classification"]
+    ["description", "category"]
   );
 
   // Aplicar filtros da URL ao termo de busca
@@ -176,11 +176,21 @@ export default function Receitas() {
   }, [filteredRevenues, categoriaFilter, linkedSourceParam]);
 
   // Busca para reutilizar receitas
-  const { filteredData: filteredReuseRevenues } = useSmartSearch(
-    revenues,
-    ["description", "category", "classification"],
-    reuseSearchTerm
-  );
+  const filteredReuseRevenues = useMemo(() => {
+    if (!revenues || !reuseSearchTerm.trim()) return revenues;
+    
+    const normalizedSearch = reuseSearchTerm
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+    
+    return revenues.filter((revenue: any) => {
+      const description = (revenue.description || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const category = (revenue.category || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return description.includes(normalizedSearch) || category.includes(normalizedSearch);
+    });
+  }, [revenues, reuseSearchTerm]);
 
   const { sortedData: sortedRevenues, SortButton } = useTableSort(finalFilteredRevenues);
 
@@ -188,21 +198,14 @@ export default function Receitas() {
   const revenueByClassification = useMemo(() => {
     if (!revenues) return [];
     
-    const classificationMap: Record<string, number> = {};
+    // Como classification não existe na API, agrupa tudo como "Sem Classificação"
+    const totalAmount = revenues.reduce((sum: number, revenue: any) => {
+      return sum + (Number(revenue.amount) || 0);
+    }, 0);
     
-    revenues.forEach((revenue: any) => {
-      const classification = revenue.classification || "Sem Classificação";
-      const amount = Number(revenue.amount) || 0;
-      
-      if (!classificationMap[classification]) {
-        classificationMap[classification] = 0;
-      }
-      classificationMap[classification] += amount;
-    });
+    if (totalAmount === 0) return [];
     
-    return Object.entries(classificationMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    return [{ name: "Sem Classificação", value: totalAmount }];
   }, [revenues]);
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
@@ -535,6 +538,7 @@ export default function Receitas() {
       frequency_type: "",
       installments: "",
       documentation_status: "PENDENTE",
+      linked_source: "",
     });
     setIsDialogOpen(true);
   };
@@ -571,6 +575,7 @@ export default function Receitas() {
           frequency_type: "fixo",
           installments: "",
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_source: "",
         });
       }
     } else if (frequency.includes("Tempo Determinado")) {
@@ -587,6 +592,7 @@ export default function Receitas() {
           frequency_type: "tempo_determinado",
           installments: installments,
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_source: "",
         });
       } else if (frequency.includes("Anual")) {
         setFormData({
@@ -599,6 +605,7 @@ export default function Receitas() {
           frequency_type: "tempo_determinado",
           installments: installments,
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_source: "",
         });
       }
     } else {
@@ -612,6 +619,7 @@ export default function Receitas() {
         frequency_type: "",
         installments: "",
         documentation_status: revenue.documentation_status || "PENDENTE",
+        linked_source: "",
       });
     }
     setIsReuseDialogOpen(false);
@@ -660,7 +668,6 @@ export default function Receitas() {
           return isNaN(date.getTime()) ? "" : format(date, "dd/MM/yyyy");
         })() : "",
         revenue.description || "",
-        revenue.classification || "",
         revenue.category || "",
         revenue.clients?.name || "",
         revenue.properties?.address || "",
@@ -671,7 +678,7 @@ export default function Receitas() {
 
       autoTable(doc, {
         startY: yPosition,
-        head: [["Data", "Descrição", "Classificação", "Categoria", "Cliente", "Imóvel", "Periodicidade", "Status Doc.", "Valor"]],
+        head: [["Data", "Descrição", "Categoria", "Cliente", "Imóvel", "Periodicidade", "Status Doc.", "Valor"]],
         body: tableData,
         theme: "striped",
         headStyles: { fillColor: [33, 150, 243], textColor: 255, fontStyle: "bold" },
@@ -708,7 +715,6 @@ export default function Receitas() {
     const data = sortedRevenues.map((revenue) => ({
       Data: format(new Date(revenue.date), "dd/MM/yyyy"),
       Descrição: revenue.description || "",
-      Classificação: revenue.classification || "",
       Categoria: revenue.category || "",
       Cliente: revenue.clients?.name || "",
       Imóvel: revenue.properties?.address || "",
@@ -963,21 +969,7 @@ export default function Receitas() {
                     })() : "-"}
                   </TableCell>
                   <TableCell className="font-semibold text-foreground border-r border-border/30 text-xs text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-center">{revenue.description || "-"}</span>
-                      {revenue.linked_source && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/30 whitespace-nowrap">
-                          🎯 {revenue.linked_source}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="border-r border-border/30 text-xs text-center">
-                    {revenue.classification ? (
-                      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary inline-block">
-                        {revenue.classification}
-                      </span>
-                    ) : "-"}
+                    {revenue.description || "-"}
                   </TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center">{revenue.category || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center">{revenue.clients?.name || "-"}</TableCell>
@@ -1079,7 +1071,7 @@ export default function Receitas() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="classification">Classificação *</Label>
-                <Select value={formData.classification || "none"} onValueChange={(value) => setFormData({ ...formData, classification: value === "none" ? "" : value, property_id: value !== "Recebimento de Aluguel" ? "" : formData.property_id })}>
+                <Select value={formData.classification || "none"} onValueChange={(value) => setFormData({ ...formData, classification: value === "none" ? "" : value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a classificação" />
                   </SelectTrigger>
