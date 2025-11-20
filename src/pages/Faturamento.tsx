@@ -835,7 +835,7 @@ export default function Faturamento() {
             <Table className="w-full min-w-max text-xs sm:text-sm border-separate border-spacing-0 min-w-[1200px]">
             <TableHeader>
               <TableRow className="border-b-2 border-primary/30 hover:bg-transparent bg-primary">
-                <TableHead className="sticky left-0 z-10 bg-primary text-primary-foreground min-w-[60px] sm:min-w-[75px] md:min-w-[100px] max-w-[60px] sm:max-w-[75px] md:max-w-[100px] text-center text-xs sm:text-sm px-2 sm:px-4 font-bold border-r border-primary/50 rounded-tl-xl">
+                <TableHead className="sticky left-0 z-10 bg-primary text-primary-foreground min-w-[120px] sm:min-w-[150px] md:min-w-[180px] text-center text-xs sm:text-sm px-2 sm:px-4 font-bold border-r border-primary/50 rounded-tl-xl">
                   <span className="text-primary-foreground font-extrabold">DESCRIÇÃO</span>
                 </TableHead>
                 {months.map((month, index) => (
@@ -889,8 +889,8 @@ export default function Faturamento() {
                 <>
                   {billingData.map((item, index) => (
                     <TableRow key={item.category} className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? "bg-card" : "bg-muted/5"}`}>
-                      <TableCell className="font-semibold sticky left-0 z-10 bg-primary text-primary-foreground text-xs sm:text-sm px-2 sm:px-4 border-r border-primary/30 max-w-[60px] sm:max-w-[75px] md:max-w-[100px]">
-                        <span className="block break-words whitespace-pre-wrap hyphens-auto leading-tight text-center text-primary-foreground font-bold">
+                      <TableCell className="font-semibold sticky left-0 z-10 bg-primary text-primary-foreground text-xs sm:text-sm px-2 sm:px-4 border-r border-primary/30 min-w-[120px] sm:min-w-[150px] md:min-w-[180px]">
+                        <span className="block whitespace-normal break-words leading-tight text-center text-primary-foreground font-bold">
                           {formatCategoryLabel(item.category)}
                         </span>
                       </TableCell>
@@ -914,7 +914,7 @@ export default function Faturamento() {
                     </TableRow>
                   ))}
                   <TableRow className="bg-primary font-bold border-t-2 border-primary/50 border-b-2 border-primary/30">
-                    <TableCell className="sticky left-0 z-10 bg-primary text-primary-foreground font-bold border-r-2 border-primary/40 text-xs sm:text-sm px-2 sm:px-4 rounded-bl-xl text-center">
+                    <TableCell className="sticky left-0 z-10 bg-primary text-primary-foreground font-bold border-r-2 border-primary/40 text-xs sm:text-sm px-2 sm:px-4 rounded-bl-xl text-center min-w-[120px] sm:min-w-[150px] md:min-w-[180px]">
                       <span className="text-primary-foreground font-extrabold">TOTAL</span>
                     </TableCell>
                     {months.map((month) => (
