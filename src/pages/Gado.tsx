@@ -352,16 +352,6 @@ export default function Gado() {
   };
 
   const handleSubmitLogic = async () => {
-    // Validação: peso é obrigatório
-    if (!formData.weight || !formData.weight.trim() || parseFloat(formData.weight) <= 0) {
-      toast({
-        title: "Erro de validação",
-        description: "O peso é obrigatório e deve ser maior que zero.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     // Calcular valor baseado no peso se fornecido
     // 1 @ = 15 kg, então: valor = (peso_kg / 15) * arrobaPrice
     let calculatedPrice = formData.purchase_price ? parseFloat(formData.purchase_price) : null;
@@ -965,16 +955,15 @@ export default function Gado() {
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="description">Descrição *</Label>
+              <Label htmlFor="description">Descrição</Label>
               <Input
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, description: value }))}
                 placeholder="Ex: Lote de Novilhas - Fazenda São João"
-                required
               />
-              <p className="text-xs text-muted-foreground">Identifique o lote de forma clara</p>
+              <p className="text-xs text-muted-foreground">Identifique o lote de forma clara (opcional)</p>
             </div>
             
             <div className="pt-2 border-t">
@@ -1079,10 +1068,9 @@ export default function Gado() {
                     }
                   }}
                   placeholder="Ex: 450 (kg)"
-                  required
                 />
                 <p className="text-xs text-muted-foreground">
-                  O valor será calculado automaticamente: 1 @ = 15 kg = {formatCurrency(arrobaPrice)}
+                  O valor será calculado automaticamente: 1 @ = 15 kg = {formatCurrency(arrobaPrice)} (opcional)
                 </p>
               </div>
             </div>
