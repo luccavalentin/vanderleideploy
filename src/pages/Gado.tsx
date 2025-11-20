@@ -568,7 +568,7 @@ export default function Gado() {
             <Button
               variant="ghost"
               className="w-full h-auto p-0 flex flex-col items-start gap-3 hover:bg-transparent"
-              onClick={() => navigate("/receitas?novo=1&categoria=Gado")}
+              onClick={() => navigate("/receitas?novo=1&categoria=Gado&linked_source=Gado")}
             >
               <div className="flex items-center gap-3 w-full">
                 <div className="p-3 rounded-lg bg-success/10">
