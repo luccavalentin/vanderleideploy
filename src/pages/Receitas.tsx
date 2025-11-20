@@ -40,6 +40,7 @@ export default function Receitas() {
   const categoriaFilter = searchParams.get("categoria") || "";
   const buscaFilter = searchParams.get("busca") || "";
   const novoParam = searchParams.get("novo") || "";
+  const linkedToParam = searchParams.get("linked_to") || "";
 
   const [formData, setFormData] = useState({
     description: "",
@@ -51,6 +52,7 @@ export default function Receitas() {
     frequency_type: "", // "tempo_determinado" ou vazio
     installments: "", // Quantidade de parcelas
     documentation_status: "PENDENTE",
+    linked_to: "", // Origem/tela de onde foi cadastrado
   });
 
   const { data: revenues } = useQuery({
@@ -91,14 +93,15 @@ export default function Receitas() {
         frequency_type: "",
         installments: "",
         documentation_status: "PENDENTE",
+        linked_to: linkedToParam || "", // Pré-preenche linked_to se especificado
       });
       setIsDialogOpen(true);
-      // Remove apenas o parâmetro "novo" da URL, mantendo "categoria" se existir
+      // Remove apenas o parâmetro "novo" da URL, mantendo "categoria" e "linked_to" se existirem
       const newSearchParams = new URLSearchParams(searchParams);
       newSearchParams.delete("novo");
       setSearchParams(newSearchParams, { replace: true });
     }
-  }, [novoParam, categoriaFilter, searchParams, setSearchParams]);
+  }, [novoParam, categoriaFilter, linkedToParam, searchParams, setSearchParams]);
 
   // Aplicar filtro adicional por categoria se especificado na URL
   const finalFilteredRevenues = useMemo(() => {
@@ -169,6 +172,7 @@ export default function Receitas() {
           frequency_type: "",
           installments: "",
           documentation_status: "PENDENTE",
+          linked_to: linkedToParam || "", // Mantém linked_to se existir
         });
         setKeepDialogOpen(false);
       } else {
@@ -288,6 +292,7 @@ export default function Receitas() {
           ? parseInt(formData.installments) 
           : null,
         documentation_status: formData.documentation_status || "PENDENTE",
+        linked_to: formData.linked_to ? standardizeText(formData.linked_to) : null,
       };
 
       // Remove campos undefined ou string vazia
@@ -328,6 +333,7 @@ export default function Receitas() {
           frequency_type: "fixo",
           installments: "",
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_to: revenue.linked_to || "",
         });
       } else if (frequency.includes("Anual")) {
         setFormData({
@@ -340,6 +346,7 @@ export default function Receitas() {
           frequency_type: "fixo",
           installments: "",
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_to: revenue.linked_to || "",
         });
       }
     } else if (frequency.includes("Tempo Determinado")) {
@@ -356,6 +363,7 @@ export default function Receitas() {
           frequency_type: "tempo_determinado",
           installments: installments,
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_to: revenue.linked_to || "",
         });
       } else if (frequency.includes("Anual")) {
         setFormData({
@@ -368,6 +376,7 @@ export default function Receitas() {
           frequency_type: "tempo_determinado",
           installments: installments,
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_to: revenue.linked_to || "",
         });
       }
     } else {
@@ -381,6 +390,7 @@ export default function Receitas() {
         frequency_type: "",
         installments: "",
         documentation_status: revenue.documentation_status || "PENDENTE",
+        linked_to: revenue.linked_to || "",
       });
     }
     setIsDialogOpen(true);
@@ -391,18 +401,19 @@ export default function Receitas() {
     setEditingId(null);
     // Manter categoria se vier da URL (ex: quando vem da tela de Gado)
     const categoryFromUrl = categoriaFilter || "";
-    setFormData({
-      description: "",
-      amount: "",
-      date: "",
-      classification: "",
-      category: categoryFromUrl, // Mantém categoria da URL se existir
-      frequency: "",
-      frequency_type: "",
-      installments: "",
-      documentation_status: "PENDENTE",
-    });
-  };
+      setFormData({
+        description: "",
+        amount: "",
+        date: "",
+        classification: "",
+        category: categoryFromUrl, // Mantém categoria da URL se existir
+        frequency: "",
+        frequency_type: "",
+        installments: "",
+        documentation_status: "PENDENTE",
+        linked_to: linkedToParam || "", // Mantém linked_to se existir
+      });
+    };
 
   const handleNewItem = () => {
     setEditingId(null);
@@ -439,6 +450,7 @@ export default function Receitas() {
           frequency_type: "fixo",
           installments: "",
           documentation_status: revenue.documentation_status || "PENDENTE",
+          linked_to: revenue.linked_to || "",
         });
       } else if (frequency.includes("Anual")) {
         setFormData({

@@ -2180,8 +2180,10 @@ export default function Dashboard() {
                   <Bar 
                     dataKey="amount" 
                     radius={[0, 8, 8, 0]}
+                    barSize={40}
+                    barCategoryGap="10%"
                   >
-                    {data.map((entry: any, index: number) => (
+                    {sortedData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Bar>
@@ -2369,8 +2371,10 @@ export default function Dashboard() {
                   <Bar 
                     dataKey="amount" 
                     radius={[0, 8, 8, 0]}
+                    barSize={40}
+                    barCategoryGap="10%"
                   >
-                    {data.map((entry: any, index: number) => (
+                    {sortedData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Bar>
@@ -2770,6 +2774,27 @@ export default function Dashboard() {
           <p className="text-muted-foreground text-sm sm:text-base md:text-lg font-medium max-w-2xl mx-auto px-2 sm:px-4 leading-relaxed mb-3 sm:mb-4">
             Visão geral do seu negócio
           </p>
+          
+          {/* Botões de Cadastro Rápido - Escritório */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mt-4 sm:mt-6">
+            <Button
+              onClick={() => navigate("/receitas?novo=1&linked_to=Escritório")}
+              className="gap-2 bg-success hover:bg-success/90 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              size="lg"
+            >
+              <TrendingUp className="w-5 h-5" />
+              <span className="font-semibold">Cadastrar Receita - Escritório</span>
+            </Button>
+            <Button
+              onClick={() => navigate("/despesas?novo=1&linked_to=Escritório")}
+              variant="destructive"
+              className="gap-2 shadow-lg hover:shadow-xl transition-all duration-300"
+              size="lg"
+            >
+              <TrendingDown className="w-5 h-5" />
+              <span className="font-semibold">Cadastrar Despesa - Escritório</span>
+            </Button>
+          </div>
           <div className="flex items-center justify-center gap-2 sm:gap-2 md:gap-3 mb-4 sm:mb-6 flex-wrap w-full max-w-full px-2">
             <Select value={periodFilter} onValueChange={(value) => {
               setPeriodFilter(value as "mensal" | "anual" | "personalizado");
