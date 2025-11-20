@@ -1577,10 +1577,10 @@ export default function Dashboard() {
       try {
         const { startDate, endDate } = getDateRange();
         
-        // Buscar todas as receitas
+        // Buscar todas as receitas (incluindo description para detectar categoria automaticamente)
         const { data, error } = await supabase
           .from("revenue")
-          .select("amount, category, date, frequency, installments");
+          .select("amount, category, date, frequency, installments, description");
         
         if (error) {
           console.error("Erro ao buscar receitas:", error);
@@ -1595,7 +1595,43 @@ export default function Dashboard() {
         
         // Processar cada receita
         data.forEach((item: any) => {
-          const category = (item.category && item.category.trim()) || "Sem categoria";
+          // Se categoria estiver vazia, tentar detectar pela descrição
+          let category = (item.category && item.category.trim()) || "";
+          
+          if (!category && item.description) {
+            const descriptionUpper = (item.description || "").toUpperCase();
+            // Detectar "ALUGUEL" na descrição
+            if (descriptionUpper.includes("ALUGUEL") || descriptionUpper.includes("ALUGUEL")) {
+              category = "Aluguel";
+            }
+            // Detectar outras categorias comuns na descrição
+            else if (descriptionUpper.includes("PRO LABORE") || descriptionUpper.includes("PROLABORE")) {
+              category = "Pro Labore";
+            }
+            else if (descriptionUpper.includes("VENDA") && descriptionUpper.includes("GADO")) {
+              category = "Venda de Gado";
+            }
+            else if (descriptionUpper.includes("SERVIÇO") || descriptionUpper.includes("SERVICO")) {
+              category = "Serviços";
+            }
+            else if (descriptionUpper.includes("ACORDO")) {
+              category = "Acordos";
+            }
+            else if (descriptionUpper.includes("COMISSÃO") || descriptionUpper.includes("COMISSAO")) {
+              category = "Comissões";
+            }
+            else if (descriptionUpper.includes("DIVIDENDO")) {
+              category = "Dividendos";
+            }
+            else if (descriptionUpper.includes("ARRENDAMENTO")) {
+              category = "Arrendamentos Rurais";
+            }
+          }
+          
+          // Se ainda não tiver categoria, usar "Sem categoria"
+          if (!category) {
+            category = "Sem categoria";
+          }
           const frequency = (item.frequency || "Única").toString();
           const installmentsCount = item.installments ? parseInt(item.installments.toString()) : null;
           const itemDate = new Date(item.date);

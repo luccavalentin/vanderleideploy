@@ -391,10 +391,33 @@ export default function Receitas() {
       // Se não preencheu "A partir de...", usar data atual
       const startDate = formData.date || new Date().toISOString().split('T')[0];
 
+      // Se categoria estiver vazia, tentar detectar pela descrição
+      let categoryToSave = formData.category;
+      if (!categoryToSave && formData.description) {
+        const descUpper = formData.description.toUpperCase();
+        if (descUpper.includes("ALUGUEL")) {
+          categoryToSave = "Aluguel";
+        } else if (descUpper.includes("PRO LABORE") || descUpper.includes("PROLABORE")) {
+          categoryToSave = "Pro Labore";
+        } else if (descUpper.includes("VENDA") && descUpper.includes("GADO")) {
+          categoryToSave = "Venda de Gado";
+        } else if (descUpper.includes("SERVIÇO") || descUpper.includes("SERVICO")) {
+          categoryToSave = "Serviços";
+        } else if (descUpper.includes("ACORDO")) {
+          categoryToSave = "Acordos";
+        } else if (descUpper.includes("COMISSÃO") || descUpper.includes("COMISSAO")) {
+          categoryToSave = "Comissões";
+        } else if (descUpper.includes("DIVIDENDO")) {
+          categoryToSave = "Dividendos";
+        } else if (descUpper.includes("ARRENDAMENTO")) {
+          categoryToSave = "Arrendamentos Rurais";
+        }
+      }
+
       const data: any = {
         description: formData.description ? standardizeText(formData.description) : null,
         classification: formData.classification ? standardizeText(formData.classification) : null,
-        category: formData.category ? standardizeText(formData.category) : null,
+        category: categoryToSave ? standardizeText(categoryToSave) : null,
         amount: formData.amount ? parseFloat(formData.amount) : 0,
         date: startDate, // Usa "A partir de..." se preenchido, senão data atual
         frequency: frequencyValue,
@@ -1037,8 +1060,63 @@ export default function Receitas() {
                 <Input
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, description: value }))}
+                  onChange={(e) => {
+                    const newDescription = e.target.value;
+                    setFormData((prev) => {
+                      // Se categoria estiver vazia, tentar detectar pela descrição
+                      let newCategory = prev.category;
+                      if (!newCategory && newDescription) {
+                        const descUpper = newDescription.toUpperCase();
+                        if (descUpper.includes("ALUGUEL")) {
+                          newCategory = "Aluguel";
+                        } else if (descUpper.includes("PRO LABORE") || descUpper.includes("PROLABORE")) {
+                          newCategory = "Pro Labore";
+                        } else if (descUpper.includes("VENDA") && descUpper.includes("GADO")) {
+                          newCategory = "Venda de Gado";
+                        } else if (descUpper.includes("SERVIÇO") || descUpper.includes("SERVICO")) {
+                          newCategory = "Serviços";
+                        } else if (descUpper.includes("ACORDO")) {
+                          newCategory = "Acordos";
+                        } else if (descUpper.includes("COMISSÃO") || descUpper.includes("COMISSAO")) {
+                          newCategory = "Comissões";
+                        } else if (descUpper.includes("DIVIDENDO")) {
+                          newCategory = "Dividendos";
+                        } else if (descUpper.includes("ARRENDAMENTO")) {
+                          newCategory = "Arrendamentos Rurais";
+                        }
+                      }
+                      return { ...prev, description: newDescription, category: newCategory };
+                    });
+                  }}
+                  onBlur={(e) => {
+                    handleStandardizeInput(e.target.value, (value) => {
+                      setFormData((prev) => {
+                        // Se categoria estiver vazia, tentar detectar pela descrição padronizada
+                        let newCategory = prev.category;
+                        if (!newCategory && value) {
+                          const descUpper = value.toUpperCase();
+                          if (descUpper.includes("ALUGUEL")) {
+                            newCategory = "Aluguel";
+                          } else if (descUpper.includes("PRO LABORE") || descUpper.includes("PROLABORE")) {
+                            newCategory = "Pro Labore";
+                          } else if (descUpper.includes("VENDA") && descUpper.includes("GADO")) {
+                            newCategory = "Venda de Gado";
+                          } else if (descUpper.includes("SERVIÇO") || descUpper.includes("SERVICO")) {
+                            newCategory = "Serviços";
+                          } else if (descUpper.includes("ACORDO")) {
+                            newCategory = "Acordos";
+                          } else if (descUpper.includes("COMISSÃO") || descUpper.includes("COMISSAO")) {
+                            newCategory = "Comissões";
+                          } else if (descUpper.includes("DIVIDENDO")) {
+                            newCategory = "Dividendos";
+                          } else if (descUpper.includes("ARRENDAMENTO")) {
+                            newCategory = "Arrendamentos Rurais";
+                          }
+                        }
+                        return { ...prev, description: value, category: newCategory };
+                      });
+                    });
+                  }}
                   placeholder="Ex: Recebimento de aluguel do imóvel X"
                   required
                 />
