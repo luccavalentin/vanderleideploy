@@ -20,7 +20,6 @@ import { Pencil, Trash2, Users, Download, Mail, Building2, User, FileText, Check
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { StatsCard } from "@/components/layout/StatsCard";
-import { QuickActions } from "@/components/QuickActions";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -464,10 +463,8 @@ const handleEdit = (client: any) => {
         }}
       />
 
-      <QuickActions />
-
       {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatsCard
           title="Total de Clientes"
           value={stats.total}
@@ -511,50 +508,70 @@ const handleEdit = (client: any) => {
       </div>
 
       {/* Filtros e Busca */}
-      <Card className="mb-4 border-2 border-border/50 rounded-2xl shadow-elegant-lg">
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex-1 w-full">
-        <SmartSearchInput
-          value={searchTerm}
-          onChange={setSearchTerm}
-                placeholder="Buscar por nome, CPF/CNPJ, telefone, email, endereço..."
-        />
-          </div>
-            <div className="flex gap-2 flex-wrap">
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os Tipos</SelectItem>
-                  <SelectItem value="Pessoa Física">Pessoa Física</SelectItem>
-                  <SelectItem value="Pessoa Jurídica">Pessoa Jurídica</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={handleExportPDF} className="gap-2 shadow-elegant hover:shadow-elegant-lg">
-                <FileText className="w-4 h-4" />
-                <span className="hidden sm:inline">Exportar PDF</span>
-                <span className="sm:hidden">PDF</span>
-              </Button>
-              <Button onClick={handleExportExcel} variant="outline" className="gap-2 shadow-sm hover:shadow-elegant">
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Exportar Excel</span>
-                <span className="sm:hidden">Excel</span>
-              </Button>
-      </div>
-          </div>
-          {(searchTerm || typeFilter !== "all") && (
-            <div className="mt-3 text-sm text-muted-foreground">
-              Mostrando {sortedClients?.length || 0} de {totalCount} {totalCount === 1 ? "cliente" : "clientes"}
+      <Card className="mb-6 border-2 border-border/50 rounded-2xl shadow-elegant-lg bg-gradient-to-br from-card to-card/95">
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <div className="flex-1 w-full">
+                <SmartSearchInput
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  placeholder="Buscar por nome, CPF/CNPJ, telefone, email, endereço..."
+                />
+              </div>
+              <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Tipos</SelectItem>
+                    <SelectItem value="Pessoa Física">Pessoa Física</SelectItem>
+                    <SelectItem value="Pessoa Jurídica">Pessoa Jurídica</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleExportPDF} className="gap-2 shadow-elegant hover:shadow-elegant-lg flex-1 sm:flex-initial">
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exportar PDF</span>
+                  <span className="sm:hidden">PDF</span>
+                </Button>
+                <Button onClick={handleExportExcel} variant="outline" className="gap-2 shadow-sm hover:shadow-elegant flex-1 sm:flex-initial">
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exportar Excel</span>
+                  <span className="sm:hidden">Excel</span>
+                </Button>
+              </div>
             </div>
-          )}
+            {(searchTerm || typeFilter !== "all") && (
+              <div className="pt-3 border-t border-border/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Mostrando <span className="font-semibold text-foreground">{sortedClients?.length || 0}</span> de <span className="font-semibold text-foreground">{totalCount}</span> {totalCount === 1 ? "cliente" : "clientes"}
+                  </span>
+                  {(searchTerm || typeFilter !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setTypeFilter("all");
+                      }}
+                      className="text-xs h-7"
+                    >
+                      Limpar filtros
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {/* Tabela */}
-      <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-x-auto">
-        <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
+      <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
           <TableHeader>
             <TableRow className="border-b-2 border-primary/30 hover:bg-transparent">
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl px-2 sm:px-4 text-xs sm:text-sm text-center min-w-[150px]">
@@ -633,10 +650,10 @@ const handleEdit = (client: any) => {
               sortedClients?.map((client: any, index: number) => (
                 <TableRow 
                   key={client.id} 
-                  className={`border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer ${index % 2 === 0 ? "bg-card" : "bg-muted/5"}`}
+                  className={`border-b border-border/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer group ${index % 2 === 0 ? "bg-card" : "bg-muted/5"}`}
                   onDoubleClick={() => handleEdit(client)}
                 >
-                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-2 sm:px-4 text-xs sm:text-sm max-w-[150px] truncate">
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-2 sm:px-4 text-xs sm:text-sm max-w-[150px] truncate group-hover:text-primary transition-colors">
                     {client.name}
                   </TableCell>
                   <TableCell className="border-r border-border/30 px-2 sm:px-4 text-xs sm:text-sm text-center">
@@ -682,20 +699,26 @@ const handleEdit = (client: any) => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleEdit(client)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(client);
+                        }}
                         aria-label="Editar cliente"
                         title="Editar cliente"
-                        className="h-8 w-8"
+                        className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all"
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(client.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(client.id);
+                        }}
                         aria-label="Excluir cliente"
                         title="Excluir cliente"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        className="h-8 w-8 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-all"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -706,6 +729,7 @@ const handleEdit = (client: any) => {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* Dialog de Cadastro/Edição */}

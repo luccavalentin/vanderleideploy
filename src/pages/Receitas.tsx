@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTableSort } from "@/hooks/useTableSort";
 import { useSmartSearch } from "@/hooks/useSmartSearch";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
-import { Pencil, Trash2, Copy, Download, FileText } from "lucide-react";
+import { Pencil, Trash2, Copy, Download, FileText, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { standardizeText, handleStandardizeInput } from "@/lib/validations";
@@ -34,6 +34,7 @@ export default function Receitas() {
   const [reuseSearchTerm, setReuseSearchTerm] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<"revenue" | "balance" | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -62,6 +63,18 @@ export default function Receitas() {
       const { data, error } = await supabase
         .from("revenue")
         .select("*, clients(name), properties(address)");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Buscar despesas para calcular o saldo
+  const { data: expenses } = useQuery({
+    queryKey: ["expenses"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("id, amount, date, description");
       if (error) throw error;
       return data;
     },
@@ -148,6 +161,49 @@ export default function Receitas() {
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
 
+  // Calcular totais e saldo em tempo real (acumulado do ano atual)
+  const financialStats = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const currentYearStart = new Date(currentYear, 0, 1); // 1º de janeiro do ano atual
+    const currentYearEnd = new Date(currentYear, 11, 31, 23, 59, 59); // 31 de dezembro do ano atual
+
+    // Filtrar receitas do ano atual
+    const revenuesThisYear = revenues?.filter((revenue: any) => {
+      if (!revenue.date) return false;
+      const revenueDate = new Date(revenue.date);
+      // Verificar se a data é válida
+      if (isNaN(revenueDate.getTime())) return false;
+      return revenueDate >= currentYearStart && revenueDate <= currentYearEnd;
+    }) || [];
+
+    // Filtrar despesas do ano atual
+    const expensesThisYear = expenses?.filter((expense: any) => {
+      if (!expense.date) return false;
+      const expenseDate = new Date(expense.date);
+      // Verificar se a data é válida
+      if (isNaN(expenseDate.getTime())) return false;
+      return expenseDate >= currentYearStart && expenseDate <= currentYearEnd;
+    }) || [];
+
+    const totalRevenue = revenuesThisYear.reduce((sum: number, revenue: any) => {
+      return sum + (Number(revenue.amount) || 0);
+    }, 0);
+
+    const totalExpenses = expensesThisYear.reduce((sum: number, expense: any) => {
+      return sum + (Number(expense.amount) || 0);
+    }, 0);
+
+    const saldo = totalRevenue - totalExpenses;
+
+    return {
+      totalRevenue,
+      totalExpenses,
+      saldo,
+      currentYear,
+      revenuesThisYear,
+      expensesThisYear
+    };
+  }, [revenues, expenses]);
 
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
 
@@ -158,6 +214,7 @@ export default function Receitas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["revenues"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses"] });
       toast({ title: "Receita cadastrada com sucesso!" });
       if (keepDialogOpen) {
         // Limpar formulário mas manter dialog aberto
@@ -197,6 +254,7 @@ export default function Receitas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["revenues"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses"] });
       toast({ title: "Receita atualizada com sucesso!" });
       handleCloseDialog();
     },
@@ -216,6 +274,7 @@ export default function Receitas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["revenues"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses"] });
       toast({ title: "Receita excluída com sucesso!" });
     },
     onError: (error: any) => {
@@ -550,7 +609,10 @@ export default function Receitas() {
 
       // Preparar dados da tabela
       const tableData = sortedRevenues.map((revenue) => [
-        format(new Date(revenue.date), "dd/MM/yyyy"),
+        revenue.date ? (() => {
+          const date = new Date(revenue.date);
+          return isNaN(date.getTime()) ? "" : format(date, "dd/MM/yyyy");
+        })() : "",
         revenue.description || "",
         revenue.classification || "",
         revenue.category || "",
@@ -737,6 +799,57 @@ export default function Receitas() {
                   </div>
                 )}
               </div>
+              </div>
+            </CardContent>
+          </Card>
+      </div>
+
+      {/* Cards de Valor Total e Saldo (Acumulado do Ano) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <Card 
+          className="border-2 border-success/30 rounded-2xl shadow-elegant-lg bg-gradient-card hover:scale-[1.01] transition-all duration-300 cursor-pointer"
+          onClick={() => setSelectedCard("revenue")}
+        >
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1 flex-1">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-success">
+                  VALOR TOTAL DE RECEITAS
+                </p>
+                <p className="text-[8px] sm:text-[9px] text-muted-foreground/70 font-medium">
+                  Acumulado {financialStats.currentYear}
+                </p>
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-none text-success break-words">
+                  {formatCurrency(financialStats.totalRevenue)}
+                </p>
+              </div>
+              <div className="relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm bg-success/10 text-success flex-shrink-0 ml-2 sm:ml-4">
+                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="border-2 border-primary/30 rounded-2xl shadow-elegant-lg bg-gradient-card hover:scale-[1.01] transition-all duration-300 cursor-pointer"
+          onClick={() => setSelectedCard("balance")}
+        >
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1 flex-1">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  SALDO (RECEITAS - DESPESAS)
+                </p>
+                <p className="text-[8px] sm:text-[9px] text-muted-foreground/70 font-medium">
+                  Acumulado {financialStats.currentYear}
+                </p>
+                <p className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-none break-words ${financialStats.saldo >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {formatCurrency(financialStats.saldo)}
+                </p>
+              </div>
+              <div className={`relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm flex-shrink-0 ml-2 sm:ml-4 ${financialStats.saldo >= 0 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+                <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -790,7 +903,12 @@ export default function Receitas() {
                   className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? "bg-card" : "bg-muted/5"}`}
                   onDoubleClick={() => handleEdit(revenue)}
                 >
-                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{format(new Date(revenue.date), "dd/MM/yyyy")}</TableCell>
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">
+                    {revenue.date ? (() => {
+                      const date = new Date(revenue.date);
+                      return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                    })() : "-"}
+                  </TableCell>
                   <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] text-center">
                     <div className="flex items-center justify-center gap-1 flex-wrap">
                       <span className="truncate">{revenue.description}</span>
@@ -1126,43 +1244,212 @@ export default function Receitas() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de Detalhes - Total de Receitas */}
-      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      {/* Dialog de Detalhes dos Cards */}
+      <Dialog open={selectedCard !== null} onOpenChange={(open) => !open && setSelectedCard(null)}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes - Total de Receitas</DialogTitle>
+            <DialogTitle>
+              {selectedCard === "revenue" 
+                ? `Detalhes - Valor Total de Receitas (${financialStats.currentYear})`
+                : `Detalhes - Saldo (Receitas - Despesas) (${financialStats.currentYear})`
+              }
+            </DialogTitle>
             <DialogDescription>
-              Lista completa de todas as {totalCount} receitas cadastradas no sistema.
+              {selectedCard === "revenue"
+                ? `Explicação detalhada do cálculo do valor total de receitas acumulado em ${financialStats.currentYear}.`
+                : `Explicação detalhada do cálculo do saldo (receitas - despesas) acumulado em ${financialStats.currentYear}.`
+              }
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[400px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead>Classificação</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Frequência</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {revenues?.map((revenue: any) => (
-                  <TableRow key={revenue.id}>
-                    <TableCell className="font-medium max-w-[200px] truncate">{revenue.description || "-"}</TableCell>
-                    <TableCell>{revenue.category || "-"}</TableCell>
-                    <TableCell>{revenue.classification || "-"}</TableCell>
-                    <TableCell className="font-bold text-success">
-                      {revenue.amount ? formatCurrency(revenue.amount) : "-"}
-                    </TableCell>
-                    <TableCell>{revenue.date ? format(new Date(revenue.date), "dd/MM/yyyy", { locale: ptBR }) : "-"}</TableCell>
-                    <TableCell>{revenue.frequency || "Única"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          
+          {selectedCard === "revenue" ? (
+            <div className="space-y-6">
+              {/* Explicação do Cálculo */}
+              <div className="bg-success/5 border-2 border-success/20 rounded-lg p-4 space-y-3">
+                <h3 className="font-bold text-lg text-foreground">Como é calculado o Valor Total de Receitas?</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Fórmula:</span>
+                    <span className="bg-card px-2 py-1 rounded border border-border">
+                      Soma de todas as receitas do ano {financialStats.currentYear}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 pt-2 border-t border-border/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total de receitas encontradas:</span>
+                      <span className="font-semibold">{financialStats.revenuesThisYear.length} {financialStats.revenuesThisYear.length === 1 ? "receita" : "receitas"}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t-2 border-success/30">
+                      <span className="font-bold text-lg">Valor Total de Receitas:</span>
+                      <span className="font-bold text-lg text-success">{formatCurrency(financialStats.totalRevenue)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de Receitas */}
+              <div className="space-y-3">
+                <h3 className="font-bold text-lg text-foreground">Receitas que compõem o total ({financialStats.revenuesThisYear.length}):</h3>
+                <div className="max-h-[400px] overflow-y-auto border border-border/30 rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Classificação</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {financialStats.revenuesThisYear.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            Nenhuma receita encontrada para o ano {financialStats.currentYear}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        financialStats.revenuesThisYear.map((revenue: any) => (
+                          <TableRow key={revenue.id}>
+                            <TableCell className="text-xs">
+                              {revenue.date ? (() => {
+                                const date = new Date(revenue.date);
+                                return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                              })() : "-"}
+                            </TableCell>
+                            <TableCell className="font-medium text-xs max-w-[200px] truncate">{revenue.description || "-"}</TableCell>
+                            <TableCell className="text-xs">{revenue.category || "-"}</TableCell>
+                            <TableCell className="text-xs">{revenue.classification || "-"}</TableCell>
+                            <TableCell className="text-right font-bold text-success text-xs">
+                              {formatCurrency(revenue.amount || 0)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Explicação do Cálculo */}
+              <div className="bg-primary/5 border-2 border-primary/20 rounded-lg p-4 space-y-3">
+                <h3 className="font-bold text-lg text-foreground">Como é calculado o Saldo?</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Fórmula:</span>
+                    <span className="bg-card px-2 py-1 rounded border border-border">
+                      Total de Receitas - Total de Despesas = Saldo
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 pt-2 border-t border-border/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total de Receitas ({financialStats.currentYear}):</span>
+                      <span className="font-semibold text-success">{formatCurrency(financialStats.totalRevenue)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total de Despesas ({financialStats.currentYear}):</span>
+                      <span className="font-semibold text-destructive">{formatCurrency(financialStats.totalExpenses)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t-2 border-primary/30">
+                      <span className="font-bold text-lg">Cálculo:</span>
+                      <span className="font-semibold text-primary">
+                        {formatCurrency(financialStats.totalRevenue)} - {formatCurrency(financialStats.totalExpenses)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t-2 border-primary/30">
+                      <span className="font-bold text-lg">Saldo Final:</span>
+                      <span className={`font-bold text-lg ${financialStats.saldo >= 0 ? 'text-success' : 'text-destructive'}`}>
+                        {formatCurrency(financialStats.saldo)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h3 className="font-bold text-lg text-success">Receitas ({financialStats.revenuesThisYear.length}):</h3>
+                  <div className="max-h-[300px] overflow-y-auto border border-border/30 rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Data</TableHead>
+                          <TableHead className="text-xs">Descrição</TableHead>
+                          <TableHead className="text-xs text-right">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {financialStats.revenuesThisYear.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-4 text-muted-foreground text-xs">
+                              Nenhuma receita
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          financialStats.revenuesThisYear.map((revenue: any) => (
+                            <TableRow key={revenue.id}>
+                              <TableCell className="text-xs">
+                                {revenue.date ? (() => {
+                                  const date = new Date(revenue.date);
+                                  return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                                })() : "-"}
+                              </TableCell>
+                              <TableCell className="font-medium text-xs max-w-[150px] truncate">{revenue.description || "-"}</TableCell>
+                              <TableCell className="text-right font-bold text-success text-xs">
+                                {formatCurrency(revenue.amount || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="font-bold text-lg text-destructive">Despesas ({financialStats.expensesThisYear.length}):</h3>
+                  <div className="max-h-[300px] overflow-y-auto border border-border/30 rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Data</TableHead>
+                          <TableHead className="text-xs">Descrição</TableHead>
+                          <TableHead className="text-xs text-right">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {financialStats.expensesThisYear.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-4 text-muted-foreground text-xs">
+                              Nenhuma despesa
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          financialStats.expensesThisYear.map((expense: any) => (
+                            <TableRow key={expense.id}>
+                              <TableCell className="text-xs">
+                                {expense.date ? (() => {
+                                  const date = new Date(expense.date);
+                                  return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                                })() : "-"}
+                              </TableCell>
+                              <TableCell className="font-medium text-xs max-w-[150px] truncate">{expense.description || "-"}</TableCell>
+                              <TableCell className="text-right font-bold text-destructive text-xs">
+                                {formatCurrency(expense.amount || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

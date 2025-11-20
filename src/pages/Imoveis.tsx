@@ -86,6 +86,7 @@ export default function Imoveis() {
     municipal_registration: "",
     rent_adjustment_type: "",
     rent_adjustment_value: "",
+    is_rental: false, // Imóvel de Locação
     // Campos para gerar despesa
     create_expense: false,
     parcel_expense: false,
@@ -386,6 +387,7 @@ export default function Imoveis() {
       "Fim Contrato": property.contract_end ? format(new Date(property.contract_end), "dd/MM/yyyy", { locale: ptBR }) : "",
       "Inscrição Municipal": property.municipal_registration || "",
       "Valor Venal": property.venal_value || 0,
+      "Imóvel de Locação": (property as any).is_rental ? "SIM" : "NÃO",
       "Reajuste Locação": property.rent_adjustment_type ? `${property.rent_adjustment_type}: ${property.rent_adjustment_text || property.rent_adjustment_percentage || ""}` : "",
     }));
 
@@ -540,6 +542,7 @@ export default function Imoveis() {
           ? formData.rent_adjustment_value
           : null,
         rent_adjustment_type: formData.rent_adjustment_type || null,
+        is_rental: formData.is_rental || false,
       };
 
       // Adiciona number e complement
@@ -607,6 +610,7 @@ export default function Imoveis() {
       rent_adjustment_value: property.rent_adjustment_type === "text"
         ? property.rent_adjustment_text || ""
         : property.rent_adjustment_percentage?.toString() || "",
+      is_rental: property.is_rental || false,
       create_expense: false,
       parcel_expense: false,
       expense_due_date: "",
@@ -635,6 +639,7 @@ export default function Imoveis() {
       municipal_registration: "",
       rent_adjustment_type: "",
       rent_adjustment_value: "",
+      is_rental: false,
       create_expense: false,
       parcel_expense: false,
       expense_due_date: "",
@@ -661,6 +666,7 @@ export default function Imoveis() {
       municipal_registration: "",
       rent_adjustment_type: "",
       rent_adjustment_value: "",
+      is_rental: false,
       create_expense: false,
       parcel_expense: false,
       expense_due_date: "",
@@ -687,7 +693,7 @@ export default function Imoveis() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 w-full">
         <StatsCard
           title="Total de Imóveis"
-          value={stats.total}
+          value={stats.total.toString()}
           icon={Building2}
           className="bg-gradient-to-br from-primary/10 to-primary/5"
           onClick={() => {
@@ -697,7 +703,7 @@ export default function Imoveis() {
         />
         <StatsCard
           title="Documentação Paga"
-          value={stats.paid}
+          value={stats.paid.toString()}
           icon={CheckCircle2}
           className="bg-gradient-to-br from-success/10 to-success/5"
           onClick={() => {
@@ -707,7 +713,7 @@ export default function Imoveis() {
         />
         <StatsCard
           title="Documentação Pendente"
-          value={stats.pending}
+          value={stats.pending.toString()}
           icon={XCircle}
           className="bg-gradient-to-br from-destructive/10 to-destructive/5"
           onClick={() => {
@@ -808,13 +814,16 @@ export default function Imoveis() {
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
                 <SortButton column="venal_value">Valor Venal</SortButton>
               </TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
+                Locação
+              </TableHead>
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs w-16 text-center">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedProperties?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground/70 border-0">
+                <TableCell colSpan={10} className="text-center py-12 text-muted-foreground/70 border-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
                       <span className="text-2xl">🏠</span>
@@ -889,6 +898,17 @@ export default function Imoveis() {
                       ? formatCurrency(property.venal_value)
                       : "-"}
                   </TableCell>
+                  <TableCell className="text-center border-r border-border/30 px-1.5 sm:px-2 text-xs">
+                    {(property as any).is_rental ? (
+                      <Badge className="bg-primary/20 text-primary hover:bg-primary/30">
+                        SIM
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        NÃO
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center border-r border-border/30 px-1.5 sm:px-2 text-xs w-16">
                     <div className="flex gap-1 justify-center">
                       <IconButton
@@ -917,12 +937,13 @@ export default function Imoveis() {
           setIsDialogOpen(true);
         }
       }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Building2 className="w-6 h-6 text-primary" />
               {editingId ? "Editar Imóvel" : "Novo Imóvel"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-base">
               {editingId
                 ? "Atualize as informações do imóvel abaixo."
                 : "Preencha os dados do novo imóvel abaixo."}
@@ -941,9 +962,15 @@ export default function Imoveis() {
               }
             }
           }}>
-            <div className="grid grid-cols-3 gap-6">
-              <div className="space-y-3">
-                <Label htmlFor="cep">CEP</Label>
+            {/* Seção: Endereço */}
+            <div className="space-y-4 p-4 bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl border border-primary/20">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-primary" />
+                Endereço do Imóvel
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cep" className="text-sm font-medium">CEP</Label>
                 <div className="relative">
                   <Input
                     id="cep"
@@ -971,8 +998,8 @@ export default function Imoveis() {
                     </p>
                   )}
               </div>
-              <div className="space-y-2.5 col-span-2">
-                <Label htmlFor="address">Endereço</Label>
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="address" className="text-sm font-medium">Endereço</Label>
                 <Input
                   id="address"
                   tabIndex={2}
@@ -995,9 +1022,9 @@ export default function Imoveis() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-6">
-              <div className="space-y-3">
-                <Label htmlFor="number">Número</Label>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="number" className="text-sm font-medium">Número</Label>
                 <Input
                   id="number"
                   tabIndex={3}
@@ -1018,8 +1045,8 @@ export default function Imoveis() {
                   placeholder="123"
                 />
               </div>
-              <div className="space-y-2.5 col-span-2">
-                <Label htmlFor="complement">Complemento</Label>
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="complement" className="text-sm font-medium">Complemento</Label>
                 <Input
                   id="complement"
                   tabIndex={4}
@@ -1042,8 +1069,8 @@ export default function Imoveis() {
               </div>
             </div>
 
-            <div className="space-y-2.5">
-              <Label htmlFor="city">Cidade</Label>
+            <div className="space-y-2">
+              <Label htmlFor="city" className="text-sm font-medium">Cidade</Label>
               <Input
                 id="city"
                 tabIndex={5}
@@ -1063,12 +1090,19 @@ export default function Imoveis() {
                 }}
               />
             </div>
+            </div>
 
-            <div className="grid grid-cols-3 gap-6">
-              <div className="space-y-3">
-                <Label htmlFor="documentation_status">
-                  Status Documentação
-                </Label>
+            {/* Seção: Informações do Imóvel */}
+            <div className="space-y-4 p-4 bg-gradient-to-br from-success/5 to-success/10 rounded-xl border border-success/20">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-success" />
+                Informações do Imóvel
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="documentation_status" className="text-sm font-medium">
+                    Status Documentação
+                  </Label>
                 <Select
                   value={formData.documentation_status}
                   onValueChange={(value) =>
@@ -1084,29 +1118,29 @@ export default function Imoveis() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-3">
-                <Label htmlFor="water_ownership">Titularidade Água</Label>
+              <div className="space-y-2">
+                <Label htmlFor="is_rental" className="text-sm font-medium">Imóvel de Locação</Label>
+                <Select
+                  value={formData.is_rental ? "SIM" : "NÃO"}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, is_rental: value === "SIM" })
+                  }
+                >
+                  <SelectTrigger tabIndex={7} className="w-full">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="SIM">SIM</SelectItem>
+                    <SelectItem value="NÃO">NÃO</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="water_ownership" className="text-sm font-medium">Titularidade Água</Label>
                 <Select
                   value={formData.water_ownership}
                   onValueChange={(value) =>
                     setFormData({ ...formData, water_ownership: value })
-                  }
-                >
-                  <SelectTrigger tabIndex={7}>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
-                    <SelectItem value="PROPRIO">PRÓPRIO</SelectItem>
-                    <SelectItem value="TERCEIROS">INQUILINO</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-3">
-                <Label htmlFor="energy_ownership">Titularidade Energia</Label>
-                <Select
-                  value={formData.energy_ownership}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, energy_ownership: value })
                   }
                 >
                   <SelectTrigger tabIndex={8}>
@@ -1118,13 +1152,30 @@ export default function Imoveis() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="energy_ownership" className="text-sm font-medium">Titularidade Energia</Label>
+                <Select
+                  value={formData.energy_ownership}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, energy_ownership: value })
+                  }
+                >
+                  <SelectTrigger tabIndex={9}>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="PROPRIO">PRÓPRIO</SelectItem>
+                    <SelectItem value="TERCEIROS">INQUILINO</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-2.5">
-              <Label htmlFor="outstanding_bills">Contas em Aberto</Label>
+            <div className="space-y-2">
+              <Label htmlFor="outstanding_bills" className="text-sm font-medium">Contas em Aberto</Label>
               <Textarea
                 id="outstanding_bills"
-                tabIndex={9}
+                tabIndex={10}
                 value={formData.outstanding_bills}
                 onChange={(e) =>
                   setFormData({
@@ -1135,15 +1186,22 @@ export default function Imoveis() {
                 rows={3}
               />
             </div>
+            </div>
 
-            <div className="grid grid-cols-3 gap-6">
-              <div className="space-y-3">
-                <Label htmlFor="contract_start">
-                  Início Contrato (Vigência)
-                </Label>
+            {/* Seção: Contrato e Locação */}
+            <div className="space-y-4 p-4 bg-gradient-to-br from-warning/5 to-warning/10 rounded-xl border border-warning/20">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-warning" />
+                Contrato e Locação
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="contract_start" className="text-sm font-medium">
+                    Início Contrato (Vigência)
+                  </Label>
                 <Input
                   id="contract_start"
-                  tabIndex={10}
+                  tabIndex={11}
                   type="date"
                   value={formData.contract_start}
                   onChange={(e) =>
@@ -1151,11 +1209,11 @@ export default function Imoveis() {
                   }
                 />
               </div>
-              <div className="space-y-3">
-                <Label htmlFor="contract_end">Fim Contrato (Vigência)</Label>
+              <div className="space-y-2">
+                <Label htmlFor="contract_end" className="text-sm font-medium">Fim Contrato (Vigência)</Label>
                 <Input
                   id="contract_end"
-                  tabIndex={11}
+                  tabIndex={12}
                   type="date"
                   value={formData.contract_end}
                   onChange={(e) =>
@@ -1163,8 +1221,8 @@ export default function Imoveis() {
                   }
                 />
               </div>
-              <div className="space-y-3">
-                <Label htmlFor="rent_adjustment_type">
+              <div className="space-y-2">
+                <Label htmlFor="rent_adjustment_type" className="text-sm font-medium">
                   Reajuste Locação
                 </Label>
                 <div className="grid grid-cols-2 gap-3">
@@ -1178,7 +1236,7 @@ export default function Imoveis() {
                       })
                     }
                   >
-                    <SelectTrigger tabIndex={12}>
+                    <SelectTrigger tabIndex={13}>
                       <SelectValue placeholder="Tipo" />
                     </SelectTrigger>
                     <SelectContent className="bg-popover z-50">
@@ -1190,7 +1248,7 @@ export default function Imoveis() {
                   {formData.rent_adjustment_type && (
                     <Input
                       id="rent_adjustment_value"
-                      tabIndex={13}
+                      tabIndex={14}
                       type={formData.rent_adjustment_type === "text" ? "text" : "number"}
                       step={formData.rent_adjustment_type === "percent" ? "0.01" : "0.01"}
                       value={formData.rent_adjustment_value}
@@ -1212,15 +1270,22 @@ export default function Imoveis() {
                 </div>
               </div>
             </div>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-              <div className="space-y-3">
-                <Label htmlFor="municipal_registration">
-                  Inscrição Municipal
-                </Label>
+            {/* Seção: Valores e Documentação */}
+            <div className="space-y-4 p-4 bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl border border-primary/20">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                Valores e Documentação
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="municipal_registration" className="text-sm font-medium">
+                    Inscrição Municipal
+                  </Label>
                 <Input
                   id="municipal_registration"
-                  tabIndex={14}
+                  tabIndex={15}
                   value={formData.municipal_registration}
                   onChange={(e) =>
                     setFormData({
@@ -1244,11 +1309,11 @@ export default function Imoveis() {
                   placeholder="Número da inscrição municipal"
                 />
               </div>
-              <div className="space-y-3">
-                <Label htmlFor="venal_value">Valor Venal</Label>
+              <div className="space-y-2">
+                <Label htmlFor="venal_value" className="text-sm font-medium">Valor Venal</Label>
                 <Input
                   id="venal_value"
-                  tabIndex={15}
+                  tabIndex={16}
                   type="text"
                   value={formData.venal_value}
                   onChange={(e) => {
@@ -1275,9 +1340,15 @@ export default function Imoveis() {
                 />
               </div>
             </div>
+            </div>
 
+            {/* Seção: Gerar Despesa (condicional) */}
             {formData.documentation_status === "PENDENTE" && (
-              <div className="space-y-4 p-4 bg-muted/20 rounded-lg shadow-sm">
+              <div className="space-y-4 p-4 bg-gradient-to-br from-destructive/5 to-destructive/10 rounded-xl border border-destructive/20">
+                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-destructive" />
+                  Gerar Despesa de Pagamento
+                </h3>
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="create_expense"
@@ -1397,11 +1468,11 @@ export default function Imoveis() {
                 variant="outline"
                 onClick={handleCloseDialog}
                 size="lg"
-                tabIndex={17}
+                tabIndex={18}
               >
                 Cancelar
               </Button>
-              <Button type="submit" size="lg" tabIndex={16}>
+              <Button type="submit" size="lg" tabIndex={17}>
                 {editingId ? "Atualizar" : "Cadastrar"}
               </Button>
             </div>

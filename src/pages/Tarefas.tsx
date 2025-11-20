@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTableSort } from "@/hooks/useTableSort";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
 import { IconButton } from "@/components/ui/IconButton";
-import { CheckCircle2, Circle, Pencil, Trash2, Filter, CheckSquare, AlertCircle, Download, FileText } from "lucide-react";
+import { CheckCircle2, Circle, Pencil, Trash2, Filter, CheckSquare, AlertCircle, Download, FileText, Plus, X } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -135,6 +135,8 @@ export default function Tarefas() {
     recurrence_type: "" as "diaria" | "semanal" | "mensal" | "anual" | "personalizada" | "",
     recurrence_end_date: "",
     recurrence_interval: 1,
+    use_checklist: false,
+    checklist_items: [] as Array<{ id?: string; text: string; completed: boolean; order_index: number }>,
   });
 
   const { data: tasks = [], isLoading: tasksLoading, error: tasksError } = useQuery({
@@ -143,7 +145,15 @@ export default function Tarefas() {
       try {
         const { data, error } = await supabase
           .from("reminders")
-          .select("*");
+          .select(`
+            *,
+            task_checklist_items (
+              id,
+              text,
+              completed,
+              order_index
+            )
+          `);
         
         if (error) {
           // Se a tabela não existe (404), retorna array vazio sem erro
@@ -431,6 +441,35 @@ export default function Tarefas() {
     return tasks;
   };
 
+  // Função auxiliar para salvar checklist items
+  const saveChecklistItems = async (reminderId: string, checklistItems: Array<{ id?: string; text: string; completed: boolean; order_index: number }>) => {
+    if (!checklistItems || checklistItems.length === 0) return;
+
+    // Primeiro, deletar todos os itens existentes
+    await supabase
+      .from("task_checklist_items")
+      .delete()
+      .eq("reminder_id", reminderId);
+
+    // Inserir os novos itens
+    const itemsToInsert = checklistItems
+      .filter(item => item.text.trim() !== "")
+      .map((item, index) => ({
+        reminder_id: reminderId,
+        text: item.text.trim(),
+        completed: item.completed || false,
+        order_index: index,
+      }));
+
+    if (itemsToInsert.length > 0) {
+      const { error } = await supabase
+        .from("task_checklist_items")
+        .insert(itemsToInsert);
+      
+      if (error) throw error;
+    }
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       // Garantir que a data seja enviada no formato correto (YYYY-MM-DD) sem conversão de timezone
@@ -448,12 +487,24 @@ export default function Tarefas() {
         recurrence_type: data.recurrence_type || null,
         recurrence_end_date: recurrenceEndDate || null,
         recurrence_interval: data.recurrence_interval || 1,
+        use_checklist: data.use_checklist || false,
       };
 
       // Se não há recorrência, cria apenas uma tarefa
       if (!data.recurrence_type) {
-        const { error } = await supabase.from("reminders").insert([baseTask]);
+        const { data: newTask, error } = await supabase
+          .from("reminders")
+          .insert([baseTask])
+          .select()
+          .single();
+        
         if (error) throw error;
+        
+        // Salvar checklist items se houver
+        if (data.use_checklist && data.checklist_items && data.checklist_items.length > 0) {
+          await saveChecklistItems(newTask.id, data.checklist_items);
+        }
+        
         return;
       }
 
@@ -466,6 +517,11 @@ export default function Tarefas() {
       
       if (parentError) throw parentError;
       if (!parentTask) throw new Error("Erro ao criar tarefa pai");
+
+      // Salvar checklist items na tarefa pai se houver
+      if (data.use_checklist && data.checklist_items && data.checklist_items.length > 0) {
+        await saveChecklistItems(parentTask.id, data.checklist_items);
+      }
 
       // Criar tarefas recorrentes
       const recurringTasks = generateRecurringTasks(
@@ -507,11 +563,23 @@ export default function Tarefas() {
         status: data.status,
         priority: data.priority,
         category: data.category ? standardizeText(data.category) : null,
+        use_checklist: data.use_checklist || false,
         recurrence_type: data.recurrence_type || null,
         recurrence_end_date: recurrenceEndDate || null,
         recurrence_interval: data.recurrence_interval || 1,
       }).eq("id", id);
       if (error) throw error;
+
+      // Salvar checklist items se houver
+      if (data.use_checklist && data.checklist_items) {
+        await saveChecklistItems(id, data.checklist_items);
+      } else if (!data.use_checklist) {
+        // Se desmarcou o checkbox, deletar todos os itens
+        await supabase
+          .from("task_checklist_items")
+          .delete()
+          .eq("reminder_id", id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -572,6 +640,19 @@ export default function Tarefas() {
     },
   });
 
+  const toggleChecklistItemMutation = useMutation({
+    mutationFn: async ({ itemId, completed }: { itemId: string; completed: boolean }) => {
+      const { error } = await supabase
+        .from("task_checklist_items")
+        .update({ completed })
+        .eq("id", itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) {
@@ -601,6 +682,18 @@ export default function Tarefas() {
       return `${year}-${month}-${day}`;
     };
     
+    // Carregar checklist items se existirem
+    const checklistItems = task.task_checklist_items 
+      ? task.task_checklist_items
+          .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+          .map((item: any) => ({
+            id: item.id,
+            text: item.text,
+            completed: item.completed || false,
+            order_index: item.order_index || 0,
+          }))
+      : [];
+
     setFormData({
       title: task.title,
       description: task.description || "",
@@ -611,6 +704,8 @@ export default function Tarefas() {
       recurrence_type: task.recurrence_type || "",
       recurrence_end_date: formatDateForInput(task.recurrence_end_date),
       recurrence_interval: task.recurrence_interval || 1,
+      use_checklist: task.use_checklist || false,
+      checklist_items: checklistItems,
     });
     setIsDialogOpen(true);
   };
@@ -652,6 +747,8 @@ export default function Tarefas() {
       recurrence_type: "",
       recurrence_end_date: "",
       recurrence_interval: 1,
+      use_checklist: false,
+      checklist_items: [],
     });
   };
 
@@ -667,8 +764,38 @@ export default function Tarefas() {
       recurrence_type: "",
       recurrence_end_date: "",
       recurrence_interval: 1,
+      use_checklist: false,
+      checklist_items: [],
     });
     setIsDialogOpen(true);
+  };
+
+  // Funções para gerenciar checklist items
+  const addChecklistItem = () => {
+    setFormData({
+      ...formData,
+      checklist_items: [
+        ...formData.checklist_items,
+        { text: "", completed: false, order_index: formData.checklist_items.length },
+      ],
+    });
+  };
+
+  const removeChecklistItem = (index: number) => {
+    const newItems = formData.checklist_items.filter((_, i) => i !== index);
+    setFormData({
+      ...formData,
+      checklist_items: newItems.map((item, i) => ({ ...item, order_index: i })),
+    });
+  };
+
+  const updateChecklistItem = (index: number, text: string) => {
+    const newItems = [...formData.checklist_items];
+    newItems[index] = { ...newItems[index], text };
+    setFormData({
+      ...formData,
+      checklist_items: newItems,
+    });
   };
 
   return (
@@ -1068,6 +1195,35 @@ export default function Tarefas() {
                     <div className="text-sm text-muted-foreground truncate">
                       {task.description || "-"}
                     </div>
+                    {/* Exibir Checklist se houver */}
+                    {task.use_checklist && task.task_checklist_items && task.task_checklist_items.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-border/30">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Checklist:</p>
+                        <div className="space-y-1.5">
+                          {task.task_checklist_items
+                            .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+                            .map((item: any, idx: number) => (
+                            <div key={item.id || idx} className="flex items-center gap-2 text-xs">
+                              <Checkbox
+                                checked={item.completed || false}
+                                onCheckedChange={(checked) => {
+                                  if (item.id) {
+                                    toggleChecklistItemMutation.mutate({
+                                      itemId: item.id,
+                                      completed: checked as boolean,
+                                    });
+                                  }
+                                }}
+                                className="h-3.5 w-3.5"
+                              />
+                              <span className={item.completed ? "line-through text-muted-foreground" : ""}>
+                                {item.text}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mt-2">
                       <span className={`text-xs font-medium ${overdue ? "text-destructive" : ""}`}>
                         Vencimento: {task.due_date ? format(new Date(task.due_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
@@ -1143,7 +1299,25 @@ export default function Tarefas() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Descrição</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="description">Descrição</Label>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="use_checklist"
+                    checked={formData.use_checklist}
+                    onCheckedChange={(checked) => {
+                      setFormData({
+                        ...formData,
+                        use_checklist: checked as boolean,
+                        checklist_items: checked ? (formData.checklist_items.length > 0 ? formData.checklist_items : [{ text: "", completed: false, order_index: 0 }]) : [],
+                      });
+                    }}
+                  />
+                  <Label htmlFor="use_checklist" className="text-sm font-normal cursor-pointer">
+                    Prefiro fazer checklist dessa tarefa
+                  </Label>
+                </div>
+              </div>
               <Textarea
                 id="description"
                 value={formData.description}
@@ -1152,6 +1326,52 @@ export default function Tarefas() {
                 rows={4}
               />
             </div>
+
+            {/* Seção de Checklist */}
+            {formData.use_checklist && (
+              <div className="space-y-3 p-4 border border-border/50 rounded-lg bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Tópicos da Checklist</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addChecklistItem}
+                    className="gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Adicionar Tópico
+                  </Button>
+                </div>
+                {formData.checklist_items.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    Nenhum tópico adicionado. Clique em "Adicionar Tópico" para começar.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {formData.checklist_items.map((item, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <Input
+                          value={item.text}
+                          onChange={(e) => updateChecklistItem(index, e.target.value)}
+                          placeholder={`Tópico ${index + 1}`}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeChecklistItem(index)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
               <div className="space-y-2">

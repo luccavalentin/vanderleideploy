@@ -21,6 +21,9 @@ import Relatorios from "./pages/Relatorios";
 import Aplicacoes from "./pages/Aplicacoes";
 import Faturamento from "./pages/Faturamento";
 import ImportData from "./pages/ImportData";
+import BusinessGrowth from "./pages/BusinessGrowth";
+import CostReduction from "./pages/CostReduction";
+import RevenueOptimization from "./pages/RevenueOptimization";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
@@ -116,6 +119,9 @@ const App = () => (
                         <Route path="/relatorios" element={<Relatorios />} />
                         <Route path="/dashboards-financeiros" element={<Relatorios />} />
                         <Route path="/importar-dados" element={<ImportData />} />
+                        <Route path="/crescimento-negocios" element={<BusinessGrowth />} />
+                        <Route path="/crescimento-negocios/reducao-custo" element={<CostReduction />} />
+                        <Route path="/crescimento-negocios/otimizacao-receita" element={<RevenueOptimization />} />
                         <Route path="*" element={<NotFound />} />
                         </Routes>
                       </div>

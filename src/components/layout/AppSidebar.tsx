@@ -17,7 +17,9 @@ import {
   Wallet as WalletIcon,
   BarChart3,
   X,
-  LogOut
+  LogOut,
+  TrendingUp as GrowthIcon,
+  Target
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
@@ -50,9 +52,16 @@ const financeiroSubItems = [
   { icon: Receipt, label: "Faturamento", path: "/faturamento" },
 ];
 
+const crescimentoSubItems = [
+  { icon: TrendingDown, label: "Redução de Custo", path: "/crescimento-negocios/reducao-custo" },
+  { icon: TrendingUp, label: "Otimização de Receita", path: "/crescimento-negocios/otimizacao-receita" },
+];
+
 const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
   const [isFinanceiroOpen, setIsFinanceiroOpen] = useState(false);
   const [isFinanceiroClicked, setIsFinanceiroClicked] = useState(false);
+  const [isCrescimentoOpen, setIsCrescimentoOpen] = useState(false);
+  const [isCrescimentoClicked, setIsCrescimentoClicked] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -92,6 +101,7 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
 
   // Verifica se algum subitem está ativo para destacar o menu pai
   const isFinanceiroActive = financeiroSubItems.some(item => location.pathname === item.path);
+  const isCrescimentoActive = crescimentoSubItems.some(item => location.pathname === item.path) || location.pathname === "/crescimento-negocios";
 
   // Abre automaticamente se algum subitem estiver ativo
   useEffect(() => {
@@ -99,7 +109,11 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
       setIsFinanceiroOpen(true);
       setIsFinanceiroClicked(true);
     }
-  }, [isFinanceiroActive]);
+    if (isCrescimentoActive) {
+      setIsCrescimentoOpen(true);
+      setIsCrescimentoClicked(true);
+    }
+  }, [isFinanceiroActive, isCrescimentoActive]);
 
   // Limpa o destaque quando navega para um menu que não é do "Meu Financeiro"
   useEffect(() => {
@@ -107,7 +121,11 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
     if (!isFinanceiroRoute && !isFinanceiroOpen) {
       setIsFinanceiroClicked(false);
     }
-  }, [location.pathname, isFinanceiroOpen]);
+    const isCrescimentoRoute = crescimentoSubItems.some(item => location.pathname === item.path) || location.pathname === "/crescimento-negocios";
+    if (!isCrescimentoRoute && !isCrescimentoOpen) {
+      setIsCrescimentoClicked(false);
+    }
+  }, [location.pathname, isFinanceiroOpen, isCrescimentoOpen]);
 
   // Handler para clicar no menu "Meu Financeiro"
   const handleFinanceiroClick = () => {
@@ -119,8 +137,19 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
     }
   };
 
+  // Handler para clicar no menu "Crescimento dos Negócios"
+  const handleCrescimentoClick = () => {
+    try {
+      setIsCrescimentoOpen(true);
+      setIsCrescimentoClicked(true);
+    } catch (error) {
+      console.error("Erro ao abrir menu crescimento:", error);
+    }
+  };
+
   // Verifica se o menu deve ser destacado (ativo ou quando está aberto e foi clicado)
   const shouldHighlightFinanceiro = isFinanceiroActive || (isFinanceiroClicked && isFinanceiroOpen);
+  const shouldHighlightCrescimento = isCrescimentoActive || (isCrescimentoClicked && isCrescimentoOpen);
 
   // Busca nome do usuário
   const userName = localStorage.getItem("userName") || "Usuário";
@@ -185,6 +214,53 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
                 <CollapsibleContent className="overflow-hidden">
                   <ul className="ml-4 mt-1 space-y-1 border-l border-sidebar-border/50 pl-4 sidebar-submenu">
                     {financeiroSubItems.map((item) => (
+                      <li key={item.path}>
+                        <NavLink
+                          to={item.path}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sidebar-foreground/80 text-sm font-medium"
+                          activeClassName=""
+                          onClick={onNavigate}
+                        >
+                          <item.icon className="w-4 h-4 icon-professional" strokeWidth={2.5} />
+                          <span className="whitespace-nowrap">{item.label}</span>
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
+            </li>
+
+            <li>
+              <Collapsible open={isCrescimentoOpen} onOpenChange={setIsCrescimentoOpen}>
+                <CollapsibleTrigger
+                  onClick={handleCrescimentoClick}
+                  className={cn(
+                    "w-full group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 font-medium",
+                    shouldHighlightCrescimento && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                  )}
+                >
+                  <GrowthIcon className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                  <span className="flex-1 text-left whitespace-nowrap">Crescimento dos Negócios</span>
+                  <ChevronDown className={cn(
+                    "w-4 h-4 transition-transform duration-75",
+                    isCrescimentoOpen && "transform rotate-180"
+                  )} />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="overflow-hidden">
+                  <ul className="ml-4 mt-1 space-y-1 border-l border-sidebar-border/50 pl-4 sidebar-submenu">
+                    <li>
+                      <NavLink
+                        to="/crescimento-negocios"
+                        className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sidebar-foreground/80 text-sm font-medium"
+                        activeClassName=""
+                        onClick={onNavigate}
+                      >
+                        <Target className="w-4 h-4 icon-professional" strokeWidth={2.5} />
+                        <span className="whitespace-nowrap">Visão Geral</span>
+                      </NavLink>
+                    </li>
+                    {crescimentoSubItems.map((item) => (
                       <li key={item.path}>
                         <NavLink
                           to={item.path}

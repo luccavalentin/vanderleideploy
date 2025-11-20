@@ -19,7 +19,7 @@ import { useTableSort } from "@/hooks/useTableSort";
 import { useSmartSearch } from "@/hooks/useSmartSearch";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
 import { StateSearchInput } from "@/components/StateSearchInput";
-import { Pencil, Trash2, Download, Package, MapPin, DollarSign, Heart, FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { Pencil, Trash2, Download, Package, MapPin, DollarSign, Heart, FileText, TrendingUp, TrendingDown, Settings } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
@@ -38,6 +38,7 @@ export default function Gado() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [priceConfigDialogOpen, setPriceConfigDialogOpen] = useState(false);
+  const [tempArrobaPrice, setTempArrobaPrice] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -128,7 +129,8 @@ export default function Gado() {
         totalValue: 0,
         totalSaleValue: 0,
         totalCost: 0,
-        totalProfit: 0
+        totalProfit: 0,
+        hasPurchasePrice: false
       };
     }
 
@@ -141,14 +143,17 @@ export default function Gado() {
     // Converte para arroba (1 @ = 15 kg)
     const totalWeightArroba = totalWeightKg / 15;
 
-    // Calcula o valor de venda total (arroba * preço da arroba)
-    const totalSaleValue = totalWeightArroba * arrobaPrice;
+    // Calcula o valor total: VALOR DO ARROBA X A QUANTIDADE DE KG = VALOR TOTAL
+    const totalSaleValue = arrobaPrice * totalWeightKg;
 
-    // Soma o custo total de compra
+    // Soma o custo total de compra e verifica se há algum preço informado
     const totalCost = cattle.reduce((sum: number, c: any) => {
       const cost = parseFloat(c.purchase_price || 0);
       return sum + cost;
     }, 0);
+
+    // Verifica se há pelo menos um gado com preço de compra informado
+    const hasPurchasePrice = cattle.some((c: any) => c.purchase_price && parseFloat(c.purchase_price) > 0);
 
     // Calcula o lucro total (valor de venda - custo de compra)
     const totalProfit = totalSaleValue - totalCost;
@@ -159,7 +164,8 @@ export default function Gado() {
       totalValue: totalProfit, // Valor Total agora é o lucro
       totalSaleValue, // Valor de venda (para referência)
       totalCost, // Custo total (para referência)
-      totalProfit // Lucro total
+      totalProfit, // Lucro total
+      hasPurchasePrice // Indica se há pelo menos um preço de compra informado
     };
   }, [cattle, arrobaPrice]);
 
@@ -168,6 +174,31 @@ export default function Gado() {
       style: "currency",
       currency: "BRL",
     }).format(value);
+  };
+
+  const handleSaveArrobaPrice = () => {
+    const price = parseFloat(tempArrobaPrice);
+    if (isNaN(price) || price <= 0) {
+      toast({
+        title: "Erro",
+        description: "Por favor, informe um valor válido maior que zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setArrobaPrice(price);
+    localStorage.setItem('cattle_arroba_price', price.toString());
+    setPriceConfigDialogOpen(false);
+    setTempArrobaPrice("");
+    toast({
+      title: "Sucesso",
+      description: `Preço do @ atualizado para ${formatCurrency(price)}`,
+    });
+  };
+
+  const handleOpenPriceConfig = () => {
+    setTempArrobaPrice(arrobaPrice.toString());
+    setPriceConfigDialogOpen(true);
   };
 
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
@@ -294,7 +325,7 @@ export default function Gado() {
         c.age_months || "",
         c.health_status || "",
         c.location || "",
-        c.purchase_price ? formatCurrency(c.purchase_price) : "",
+        c.purchase_price ? formatCurrency(c.purchase_price) : "não informado",
         c.purchase_date ? format(new Date(c.purchase_date), "dd/MM/yyyy", { locale: ptBR }) : "",
       ]);
 
@@ -341,7 +372,7 @@ export default function Gado() {
       "Idade (meses)": c.age_months || "",
       "Status de Saúde": c.health_status || "",
       Localização: c.location || "",
-      "Preço de Compra": c.purchase_price ? formatCurrency(c.purchase_price) : "",
+      "Preço de Compra": c.purchase_price ? formatCurrency(c.purchase_price) : "não informado",
       "Data de Compra": c.purchase_date ? format(new Date(c.purchase_date), "dd/MM/yyyy", { locale: ptBR }) : "",
     }));
 
@@ -370,12 +401,11 @@ export default function Gado() {
 
   const handleSubmitLogic = async () => {
     // Calcular valor baseado no peso se fornecido
-    // 1 @ = 15 kg, então: valor = (peso_kg / 15) * arrobaPrice
+    // VALOR DO ARROBA X A QUANTIDADE DE KG = VALOR TOTAL
     let calculatedPrice = formData.purchase_price ? parseFloat(formData.purchase_price) : null;
     if (formData.weight && parseFloat(formData.weight) > 0) {
       const weightKg = parseFloat(formData.weight);
-      const arrobas = weightKg / 15; // 1 @ = 15 kg
-      calculatedPrice = arrobas * arrobaPrice;
+      calculatedPrice = arrobaPrice * weightKg;
     }
     
     const data = {
@@ -449,15 +479,6 @@ export default function Gado() {
     setIsDialogOpen(true);
   };
 
-  const handleSaveArrobaPrice = () => {
-    localStorage.setItem('cattle_arroba_price', arrobaPrice.toString());
-    toast({
-      title: "Preço do @ atualizado",
-      description: `Novo preço: ${formatCurrency(arrobaPrice)} por @`,
-    });
-    setPriceConfigDialogOpen(false);
-  };
-
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       <PageHeader
@@ -469,34 +490,34 @@ export default function Gado() {
         }}
       />
 
-      {/* Botão para configurar preço do @ */}
-      <div className="mb-4 flex justify-end">
-        <Button
-          variant="outline"
-          onClick={() => setPriceConfigDialogOpen(true)}
-          className="gap-2"
-        >
-          <DollarSign className="w-4 h-4" />
-          Configurar Preço do @
-        </Button>
-      </div>
-
       {/* Calculadora de Peso e Valor Total */}
       <Card className="mb-6 border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 shadow-elegant-lg">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-foreground mb-2 flex items-center gap-2">
-                <Package className="w-5 h-5 text-primary" />
-                Calculadora de Gado
-              </h3>
+            <div className="flex-1 w-full">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Package className="w-5 h-5 text-primary" />
+                  Calculadora de Gado
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenPriceConfig}
+                  className="gap-2"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span className="hidden sm:inline">Configurar Preço do @</span>
+                  <span className="sm:hidden">Preço @</span>
+                </Button>
+              </div>
               <p className="text-sm text-muted-foreground mb-4">
                 Peso total e valor estimado do rebanho
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-primary/30 transition-colors">
                   <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Peso Total (kg)
+                    PESO TOTAL (KG)
                   </p>
                   <p className="text-lg sm:text-xl md:text-2xl font-bold text-foreground break-words leading-tight">
                     {weightCalculator.totalWeightKg.toLocaleString('pt-BR', { 
@@ -505,9 +526,10 @@ export default function Gado() {
                     })} <span className="text-xs sm:text-sm font-normal text-muted-foreground">kg</span>
                   </p>
                 </div>
-                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-primary/30 transition-colors">
+                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-primary/30 transition-colors relative">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-3/4 bg-border/50"></div>
                   <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Peso Total (@)
+                    PESO TOTAL (@)
                   </p>
                   <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary break-words leading-tight">
                     {weightCalculator.totalWeightArroba.toLocaleString('pt-BR', { 
@@ -516,20 +538,42 @@ export default function Gado() {
                     })} <span className="text-xs sm:text-sm font-normal text-muted-foreground">@</span>
                   </p>
                 </div>
-                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-success/30 transition-colors">
+                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-warning/30 transition-colors relative">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-3/4 bg-border/50"></div>
                   <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Lucro Total (R$)
+                    VALOR DO @
                   </p>
-                  <p className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold break-words leading-tight ${weightCalculator.totalValue >= 0 ? 'text-success' : 'text-destructive'}`} style={{ 
-                    wordBreak: 'break-word', 
-                    overflowWrap: 'break-word',
-                    lineHeight: '1.2'
-                  }}>
-                    {formatCurrency(weightCalculator.totalValue)}
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-warning break-words leading-tight">
+                    {formatCurrency(arrobaPrice)}
                   </p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-2 pt-2 border-t border-border/30">
-                    Venda: {formatCurrency(weightCalculator.totalSaleValue)} | Custo: {formatCurrency(weightCalculator.totalCost)}
+                </div>
+                <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-success/30 transition-colors relative">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-3/4 bg-border/50"></div>
+                  <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    LUCRO TOTAL (R$)
                   </p>
+                  {!weightCalculator.hasPurchasePrice && cattle && cattle.length > 0 ? (
+                    <p className="text-[10px] sm:text-xs text-muted-foreground italic leading-tight" style={{ 
+                      wordBreak: 'break-word', 
+                      overflowWrap: 'break-word',
+                      lineHeight: '1.4'
+                    }}>
+                      Para calcular lucro informe o valor de compra de cada gado
+                    </p>
+                  ) : (
+                    <>
+                      <p className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold break-words leading-tight ${weightCalculator.totalValue >= 0 ? 'text-success' : 'text-destructive'}`} style={{ 
+                        wordBreak: 'break-word', 
+                        overflowWrap: 'break-word',
+                        lineHeight: '1.2'
+                      }}>
+                        {formatCurrency(weightCalculator.totalValue)}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-2 pt-2 border-t border-border/30">
+                        Venda: {formatCurrency(weightCalculator.totalSaleValue)} | Custo: {formatCurrency(weightCalculator.totalCost)}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -753,7 +797,7 @@ export default function Gado() {
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.health_status || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] truncate text-center">{item.location || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</TableCell>
-                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.purchase_price ? formatCurrency(item.purchase_price) : <span className="text-muted-foreground italic">não informado</span>}</TableCell>
                   <TableCell className="text-center border-r border-border/30 px-1.5 sm:px-2 text-xs w-16">
                     <div className="flex gap-1 justify-center">
                       <Button
@@ -805,8 +849,91 @@ export default function Gado() {
             </DialogTitle>
           </DialogHeader>
           {selectedStat && (() => {
-            // Se for um filtro (total, femeas, machos, etc), mostrar lista de registros
-            if (selectedStat === "total" || selectedStat === "quantity" || selectedStat === "value") {
+            // Se for "value", mostrar explicação detalhada do cálculo
+            if (selectedStat === "value") {
+              const itemsToShow = sortedCattle || [];
+              if (itemsToShow.length === 0) {
+                return <div className="text-muted-foreground">Nenhum lote de gado cadastrado.</div>;
+              }
+              
+              return (
+                <div className="space-y-6">
+                  {/* Explicação do Cálculo */}
+                  <div className="bg-primary/5 border-2 border-primary/20 rounded-lg p-4 space-y-3">
+                    <h3 className="font-bold text-lg text-foreground">Como é calculado o Valor Total?</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">Fórmula:</span>
+                        <span className="bg-card px-2 py-1 rounded border border-border">Preço do @ × Quantidade de KG = Valor Total</span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 pt-2 border-t border-border/30">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Preço do @ (arroba):</span>
+                          <span className="font-semibold">{formatCurrency(arrobaPrice)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Peso Total (KG):</span>
+                          <span className="font-semibold">{weightCalculator.totalWeightKg.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-border/30">
+                          <span className="text-muted-foreground">Cálculo:</span>
+                          <span className="font-semibold text-primary">
+                            {formatCurrency(arrobaPrice)} × {weightCalculator.totalWeightKg.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t-2 border-primary/30">
+                          <span className="font-bold text-lg">Valor Total de Venda:</span>
+                          <span className="font-bold text-lg text-primary">{formatCurrency(weightCalculator.totalSaleValue)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-border/30">
+                          <span className="text-muted-foreground">Custo Total de Compra:</span>
+                          <span className="font-semibold text-destructive">{formatCurrency(weightCalculator.totalCost)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t-2 border-success/30">
+                          <span className="font-bold text-lg">Lucro Total:</span>
+                          <span className={`font-bold text-lg ${weightCalculator.totalProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                            {formatCurrency(weightCalculator.totalProfit)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detalhamento por Lote */}
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-lg text-foreground">Detalhamento por Lote:</h3>
+                    {itemsToShow.map((item: any) => {
+                      const itemWeight = parseFloat(item.weight || 0);
+                      const itemValue = arrobaPrice * itemWeight;
+                      return (
+                        <div key={item.id} className="border border-border/30 rounded-lg p-3 space-y-2 bg-card/50">
+                          <div className="font-semibold text-foreground">{item.description || "Sem descrição"}</div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div><b>Categoria:</b> {item.category || "-"}</div>
+                            <div><b>Origem:</b> {item.origin || "-"}</div>
+                            <div><b>Peso:</b> {item.weight ? `${item.weight} kg` : "-"}</div>
+                            <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : <span className="text-muted-foreground italic">não informado</span>}</div>
+                          </div>
+                          {itemWeight > 0 && (
+                            <div className="pt-2 border-t border-border/30 text-sm">
+                              <div className="flex justify-between items-center">
+                                <span className="text-muted-foreground">Cálculo do lote:</span>
+                                <span className="font-semibold">
+                                  {formatCurrency(arrobaPrice)} × {itemWeight.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg = {formatCurrency(itemValue)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+            
+            // Se for um filtro (total, quantity), mostrar lista de registros
+            if (selectedStat === "total" || selectedStat === "quantity") {
               const itemsToShow = sortedCattle || [];
               if (itemsToShow.length === 0) {
                 return <div className="text-muted-foreground">Nenhum lote de gado cadastrado.</div>;
@@ -825,7 +952,7 @@ export default function Gado() {
                         <div><b>Saúde:</b> {item.health_status || "-"}</div>
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
-                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : <span className="text-muted-foreground italic">não informado</span>}</div>
                       </div>
                       <div className="flex justify-end">
                         <Button
@@ -864,7 +991,7 @@ export default function Gado() {
                         <div><b>Saúde:</b> {item.health_status || "-"}</div>
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
-                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : <span className="text-muted-foreground italic">não informado</span>}</div>
                       </div>
                       <div className="flex justify-end">
                         <Button
@@ -903,7 +1030,7 @@ export default function Gado() {
                         <div><b>Saúde:</b> {item.health_status || "-"}</div>
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
-                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : <span className="text-muted-foreground italic">não informado</span>}</div>
                       </div>
                       <div className="flex justify-end">
                         <Button
@@ -940,7 +1067,7 @@ export default function Gado() {
                   <div><b>Saúde:</b> {item.health_status || "-"}</div>
                   <div><b>Localização:</b> {item.location || "-"}</div>
                   <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
-                  <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                  <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : <span className="text-muted-foreground italic">não informado</span>}</div>
                 </div>
                 <div className="flex justify-end gap-2 pt-4 border-t">
                   <Button
@@ -1079,11 +1206,10 @@ export default function Gado() {
                   value={formData.weight}
                   onChange={(e) => {
                     const weight = e.target.value;
-                    // Calcular valor automaticamente: 1 @ = 15 kg
+                    // Calcular valor automaticamente: VALOR DO ARROBA X A QUANTIDADE DE KG = VALOR TOTAL
                     if (weight && parseFloat(weight) > 0) {
                       const weightKg = parseFloat(weight);
-                      const arrobas = weightKg / 15;
-                      const calculatedPrice = arrobas * arrobaPrice;
+                      const calculatedPrice = arrobaPrice * weightKg;
                       setFormData({ ...formData, weight, purchase_price: calculatedPrice.toFixed(2) });
                     } else {
                       setFormData({ ...formData, weight });
@@ -1110,7 +1236,7 @@ export default function Gado() {
                 />
                 <p className="text-xs text-muted-foreground">
                   {formData.weight && parseFloat(formData.weight) > 0 
-                    ? `Calculado: ${(parseFloat(formData.weight) / 15).toFixed(2)} @ × R$ 347.000,00`
+                    ? `Calculado: ${formatCurrency(arrobaPrice)} × ${parseFloat(formData.weight)} kg = ${formatCurrency(arrobaPrice * parseFloat(formData.weight))}`
                     : "Ou informe manualmente"}
                 </p>
               </div>
@@ -1128,35 +1254,40 @@ export default function Gado() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para configurar preço do @ */}
+      {/* Dialog para Configurar Preço do @ */}
       <Dialog open={priceConfigDialogOpen} onOpenChange={setPriceConfigDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Configurar Preço do @ (Arroba)</DialogTitle>
             <DialogDescription>
-              Defina o preço por @ (arroba) para cálculo automático do valor do gado. 1 @ = 15 kg
+              Defina o preço da arroba (1 @ = 15 kg) para calcular o valor estimado do rebanho.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="arroba_price">Preço por @ (R$)</Label>
+              <Label htmlFor="arroba_price">Preço do @ (R$)</Label>
               <Input
                 id="arroba_price"
                 type="number"
-                step="1000"
-                value={arrobaPrice}
-                onChange={(e) => setArrobaPrice(parseFloat(e.target.value) || 305)}
-                placeholder="305"
+                step="0.01"
+                min="0"
+                value={tempArrobaPrice}
+                onChange={(e) => setTempArrobaPrice(e.target.value)}
+                placeholder="Ex: 310.00"
               />
               <p className="text-xs text-muted-foreground">
-                Preço atual: {formatCurrency(arrobaPrice)} por @
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Exemplo: Gado de 450 kg = 30 @ × {formatCurrency(arrobaPrice)} = {formatCurrency((450 / 15) * arrobaPrice)}
+                Preço atual: <span className="font-semibold">{formatCurrency(arrobaPrice)}</span>
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => setPriceConfigDialogOpen(false)}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  setPriceConfigDialogOpen(false);
+                  setTempArrobaPrice("");
+                }}
+              >
                 Cancelar
               </Button>
               <Button type="button" onClick={handleSaveArrobaPrice}>

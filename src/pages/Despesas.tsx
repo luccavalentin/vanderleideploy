@@ -13,11 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTableSort } from "@/hooks/useTableSort";
 import { useSmartSearch } from "@/hooks/useSmartSearch";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
-import { Pencil, Trash2, TrendingDown, Download, FileText } from "lucide-react";
+import { Pencil, Trash2, TrendingDown, Download, FileText, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { standardizeText, handleStandardizeInput } from "@/lib/validations";
@@ -30,7 +31,10 @@ export default function Despesas() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<"expense" | "balance" | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -58,6 +62,18 @@ export default function Despesas() {
       const { data, error } = await supabase
         .from("expenses")
         .select("*, clients(name)");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Buscar receitas para calcular o saldo
+  const { data: revenues } = useQuery({
+    queryKey: ["revenues"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("revenue")
+        .select("id, amount, date, description");
       if (error) throw error;
       return data;
     },
@@ -136,6 +152,49 @@ export default function Despesas() {
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--destructive))', 'hsl(var(--warning))', 'hsl(var(--success))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
 
+  // Calcular totais e saldo em tempo real (acumulado do ano atual)
+  const financialStats = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const currentYearStart = new Date(currentYear, 0, 1); // 1º de janeiro do ano atual
+    const currentYearEnd = new Date(currentYear, 11, 31, 23, 59, 59); // 31 de dezembro do ano atual
+
+    // Filtrar receitas do ano atual
+    const revenuesThisYear = revenues?.filter((revenue: any) => {
+      if (!revenue.date) return false;
+      const revenueDate = new Date(revenue.date);
+      // Verificar se a data é válida
+      if (isNaN(revenueDate.getTime())) return false;
+      return revenueDate >= currentYearStart && revenueDate <= currentYearEnd;
+    }) || [];
+
+    // Filtrar despesas do ano atual
+    const expensesThisYear = expenses?.filter((expense: any) => {
+      if (!expense.date) return false;
+      const expenseDate = new Date(expense.date);
+      // Verificar se a data é válida
+      if (isNaN(expenseDate.getTime())) return false;
+      return expenseDate >= currentYearStart && expenseDate <= currentYearEnd;
+    }) || [];
+
+    const totalRevenue = revenuesThisYear.reduce((sum: number, revenue: any) => {
+      return sum + (Number(revenue.amount) || 0);
+    }, 0);
+
+    const totalExpenses = expensesThisYear.reduce((sum: number, expense: any) => {
+      return sum + (Number(expense.amount) || 0);
+    }, 0);
+
+    const saldo = totalRevenue - totalExpenses;
+
+    return {
+      totalRevenue,
+      totalExpenses,
+      saldo,
+      currentYear,
+      revenuesThisYear,
+      expensesThisYear
+    };
+  }, [revenues, expenses]);
 
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
 
@@ -146,6 +205,7 @@ export default function Despesas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["revenues"] });
       await queryClient.invalidateQueries({ queryKey: ["expenses-by-category"] });
       await queryClient.invalidateQueries({ queryKey: ["monthly-analysis"] });
       toast({ title: "Despesa cadastrada com sucesso!" });
@@ -186,6 +246,7 @@ export default function Despesas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["revenues"] });
       await queryClient.invalidateQueries({ queryKey: ["expenses-by-category"] });
       await queryClient.invalidateQueries({ queryKey: ["monthly-analysis"] });
       toast({ title: "Despesa atualizada com sucesso!" });
@@ -207,9 +268,12 @@ export default function Despesas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["revenues"] });
       await queryClient.invalidateQueries({ queryKey: ["expenses-by-category"] });
       await queryClient.invalidateQueries({ queryKey: ["monthly-analysis"] });
       toast({ title: "Despesa excluída com sucesso!" });
+      setDeleteDialogOpen(false);
+      setExpenseToDelete(null);
     },
     onError: (error: any) => {
       toast({
@@ -391,6 +455,19 @@ export default function Despesas() {
     setIsDialogOpen(true);
   };
 
+  const handleDelete = (id: string) => {
+    setExpenseToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (expenseToDelete) {
+      deleteMutation.mutate(expenseToDelete);
+      setDeleteDialogOpen(false);
+      setExpenseToDelete(null);
+    }
+  };
+
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingId(null);
@@ -477,7 +554,10 @@ export default function Despesas() {
 
       // Preparar dados da tabela
       const tableData = sortedExpenses.map((expense) => [
-        format(new Date(expense.date), "dd/MM/yyyy"),
+        expense.date ? (() => {
+          const date = new Date(expense.date);
+          return isNaN(date.getTime()) ? "" : format(date, "dd/MM/yyyy");
+        })() : "",
         expense.description || "",
         expense.category || "",
         expense.clients?.name || "",
@@ -522,7 +602,10 @@ export default function Despesas() {
     }
 
     const data = sortedExpenses.map((expense) => ({
-      Data: format(new Date(expense.date), "dd/MM/yyyy"),
+      Data: expense.date ? (() => {
+        const date = new Date(expense.date);
+        return isNaN(date.getTime()) ? "" : format(date, "dd/MM/yyyy");
+      })() : "",
       Descrição: expense.description || "",
       Categoria: expense.category || "",
       Fornecedor: expense.clients?.name || "",
@@ -556,128 +639,175 @@ export default function Despesas() {
 
       <QuickActions />
 
-      <div className="mb-4 flex items-center justify-end gap-2">
-        <Button onClick={handleExportPDF} className="gap-2 shadow-elegant hover:shadow-elegant-lg">
-          <FileText className="w-4 h-4" />
-          <span className="hidden sm:inline">Exportar PDF</span>
-          <span className="sm:hidden">PDF</span>
-        </Button>
-        <Button onClick={handleExportExcel} variant="outline" className="gap-2 shadow-sm hover:shadow-elegant">
-          <Download className="w-4 h-4" />
-          <span className="hidden sm:inline">Exportar Excel</span>
-          <span className="sm:hidden">Excel</span>
-        </Button>
-      </div>
-
-      <div className="mb-6">
+      {/* Cards de Valor Total e Saldo (Acumulado do Ano) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <Card 
-          className="border-2 border-destructive/50 rounded-2xl shadow-elegant-lg bg-gradient-card overflow-visible cursor-pointer hover:scale-[1.01] transition-all duration-300"
-          onClick={() => setDetailsDialogOpen(true)}
+          className="border-2 border-destructive/30 rounded-2xl shadow-elegant-lg bg-gradient-card hover:scale-[1.01] transition-all duration-300 cursor-pointer"
+          onClick={() => setSelectedCard("expense")}
         >
           <CardContent className="p-4 sm:p-6">
-            <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
-              {/* Total de Despesas */}
-              <div className="flex items-center justify-between w-full lg:w-auto lg:min-w-[200px]">
-                <div className="space-y-2 flex-1">
-                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-destructive">
-                    TOTAL DE DESPESAS
-                  </p>
-                  <p className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-none text-destructive">
-                    {totalCount.toString()}
-                  </p>
-                </div>
-                <div className="relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm bg-destructive/10 text-destructive flex-shrink-0 ml-2 sm:ml-4">
-                  <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
-                </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1 flex-1">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-destructive">
+                  VALOR TOTAL DE DESPESAS
+                </p>
+                <p className="text-[8px] sm:text-[9px] text-muted-foreground/70 font-medium">
+                  Acumulado {financialStats.currentYear}
+                </p>
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-none text-destructive break-words">
+                  {formatCurrency(financialStats.totalExpenses)}
+                </p>
               </div>
-              
-              {/* Gráfico de Pizza */}
-              <div className="flex-1 w-full lg:w-auto">
-                <div className="mb-2">
-                  <p className="text-sm font-semibold text-foreground">Origem das Despesas</p>
-                </div>
-                {expenseByCategory.length > 0 ? (
-                  <div className="w-full overflow-visible">
-                    <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : window.innerWidth < 768 ? 280 : 300} className="min-h-[320px] sm:min-h-[280px] md:min-h-[300px]">
-                      <PieChart margin={{ top: 10, right: 10, bottom: typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 80, left: 10 }}>
-                        <Pie
-                          data={expenseByCategory}
-                          cx="50%"
-                          cy={typeof window !== 'undefined' && window.innerWidth < 640 ? "40%" : "45%"}
-                          labelLine={false}
-                          label={false}
-                          outerRadius={typeof window !== 'undefined' && window.innerWidth < 640 ? 60 : 70}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {expenseByCategory.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--popover))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '0.75rem',
-                            padding: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                            fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '11px' : '13px'
-                          }}
-                          formatter={(value: any) => formatCurrency(value)}
-                        />
-                        <Legend 
-                          verticalAlign="bottom" 
-                          height={typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 60}
-                          iconType="circle"
-                          wrapperStyle={{ 
-                            paddingTop: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '20px',
-                            fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '11px',
-                            fontWeight: '500',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
-                            width: '100%',
-                            maxWidth: '100%',
-                            overflow: 'visible',
-                            lineHeight: '1.6',
-                            wordBreak: 'break-word',
-                            whiteSpace: 'normal'
-                          }}
-                          formatter={(value) => {
-                            const maxLength = typeof window !== 'undefined' && window.innerWidth < 640 ? 20 : 30;
-                            return value.length > maxLength ? value.substring(0, maxLength) + '...' : value;
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-[250px] text-muted-foreground">
-                    <p>Nenhuma despesa cadastrada</p>
-                  </div>
-                )}
+              <div className="relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm bg-destructive/10 text-destructive flex-shrink-0 ml-2 sm:ml-4">
+                <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="border-2 border-primary/30 rounded-2xl shadow-elegant-lg bg-gradient-card hover:scale-[1.01] transition-all duration-300 cursor-pointer"
+          onClick={() => setSelectedCard("balance")}
+        >
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1 flex-1">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  SALDO (RECEITAS - DESPESAS)
+                </p>
+                <p className="text-[8px] sm:text-[9px] text-muted-foreground/70 font-medium">
+                  Acumulado {financialStats.currentYear}
+                </p>
+                <p className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-none break-words ${financialStats.saldo >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {formatCurrency(financialStats.saldo)}
+                </p>
+              </div>
+              <div className={`relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm flex-shrink-0 ml-2 sm:ml-4 ${financialStats.saldo >= 0 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+                <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <SmartSearchInput
-          value={searchTerm}
-          onChange={setSearchTerm}
-          placeholder="Buscar por descrição, categoria, status..."
-        />
-        {searchTerm && (
-          <div className="text-sm text-muted-foreground">
-            Mostrando {resultCount} de {totalCount} {resultCount === 1 ? "despesa" : "despesas"}
-          </div>
-        )}
-      </div>
+      {/* Gráfico de Origem das Despesas */}
+      {expenseByCategory.length > 0 && (
+        <Card className="mb-6 border-2 border-border/50 rounded-2xl shadow-elegant-lg bg-gradient-to-br from-card to-card/95">
+          <CardContent className="p-5 sm:p-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-bold text-foreground">Origem das Despesas</h3>
+              <p className="text-sm text-muted-foreground">Distribuição por categoria</p>
+            </div>
+            <div className="w-full overflow-visible">
+              <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : window.innerWidth < 768 ? 350 : 400} className="min-h-[320px] sm:min-h-[350px] md:min-h-[400px]">
+                <PieChart margin={{ top: 10, right: 10, bottom: typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 80, left: 10 }}>
+                  <Pie
+                    data={expenseByCategory}
+                    cx="50%"
+                    cy={typeof window !== 'undefined' && window.innerWidth < 640 ? "40%" : "45%"}
+                    labelLine={false}
+                    label={false}
+                    outerRadius={typeof window !== 'undefined' && window.innerWidth < 640 ? 80 : 100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {expenseByCategory.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--popover))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '0.75rem',
+                      padding: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '11px' : '13px'
+                    }}
+                    formatter={(value: any) => formatCurrency(value)}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 60}
+                    iconType="circle"
+                    wrapperStyle={{ 
+                      paddingTop: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '20px',
+                      fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '11px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
+                      width: '100%',
+                      maxWidth: '100%',
+                      overflow: 'visible',
+                      lineHeight: '1.6',
+                      wordBreak: 'break-word',
+                      whiteSpace: 'normal'
+                    }}
+                    formatter={(value) => {
+                      const maxLength = typeof window !== 'undefined' && window.innerWidth < 640 ? 20 : 30;
+                      return value.length > maxLength ? value.substring(0, maxLength) + '...' : value;
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-x-auto">
-        <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
+      {/* Filtros e Busca */}
+      <Card className="mb-6 border-2 border-border/50 rounded-2xl shadow-elegant-lg bg-gradient-to-br from-card to-card/95">
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <div className="flex-1 w-full">
+                <SmartSearchInput
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  placeholder="Buscar por descrição, categoria, status..."
+                />
+              </div>
+              <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+                <Button onClick={handleExportPDF} className="gap-2 shadow-elegant hover:shadow-elegant-lg flex-1 sm:flex-initial">
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exportar PDF</span>
+                  <span className="sm:hidden">PDF</span>
+                </Button>
+                <Button onClick={handleExportExcel} variant="outline" className="gap-2 shadow-sm hover:shadow-elegant flex-1 sm:flex-initial">
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exportar Excel</span>
+                  <span className="sm:hidden">Excel</span>
+                </Button>
+              </div>
+            </div>
+            {searchTerm && (
+              <div className="pt-3 border-t border-border/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Mostrando <span className="font-semibold text-foreground">{resultCount}</span> de <span className="font-semibold text-foreground">{totalCount}</span> {totalCount === 1 ? "despesa" : "despesas"}
+                  </span>
+                  {searchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSearchTerm("")}
+                      className="text-xs h-7"
+                    >
+                      Limpar busca
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
           <TableHeader>
             <TableRow className="border-b-2 border-destructive/30 hover:bg-transparent">
               <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl px-1.5 sm:px-2 text-xs text-center">Data</TableHead>
@@ -705,11 +835,16 @@ export default function Despesas() {
               sortedExpenses?.map((expense, index) => (
                 <TableRow 
                   key={expense.id} 
-                  className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${index % 2 === 0 ? "bg-card" : "bg-muted/5"}`}
+                  className={`border-b border-border/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer group ${index % 2 === 0 ? "bg-card" : "bg-muted/5"}`}
                   onDoubleClick={() => handleEdit(expense)}
                 >
-                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{format(new Date(expense.date), "dd/MM/yyyy")}</TableCell>
-                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] text-center">
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">
+                    {expense.date ? (() => {
+                      const date = new Date(expense.date);
+                      return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                    })() : "-"}
+                  </TableCell>
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] text-center group-hover:text-primary transition-colors">
                     <div className="flex items-center justify-center gap-1 flex-wrap">
                       <span className="truncate">{expense.description}</span>
                       {expense.linked_source && (
@@ -734,18 +869,26 @@ export default function Despesas() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleEdit(expense)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(expense);
+                        }}
                         aria-label="Editar despesa"
                         title="Editar despesa"
+                        className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all"
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => deleteMutation.mutate(expense.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(expense.id);
+                        }}
                         aria-label="Excluir despesa"
                         title="Excluir despesa"
+                        className="h-8 w-8 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-all"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -756,6 +899,7 @@ export default function Despesas() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -959,49 +1103,239 @@ export default function Despesas() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de Detalhes - Total de Despesas */}
-      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      {/* Dialog de Detalhes dos Cards */}
+      <Dialog open={selectedCard !== null} onOpenChange={(open) => !open && setSelectedCard(null)}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes - Total de Despesas</DialogTitle>
+            <DialogTitle>
+              {selectedCard === "expense" 
+                ? `Detalhes - Valor Total de Despesas (${financialStats.currentYear})`
+                : `Detalhes - Saldo (Receitas - Despesas) (${financialStats.currentYear})`
+              }
+            </DialogTitle>
             <DialogDescription>
-              Lista completa de todas as {totalCount} despesas cadastradas no sistema.
+              {selectedCard === "expense"
+                ? `Explicação detalhada do cálculo do valor total de despesas acumulado em ${financialStats.currentYear}.`
+                : `Explicação detalhada do cálculo do saldo (receitas - despesas) acumulado em ${financialStats.currentYear}.`
+              }
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[400px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Frequência</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {expenses?.map((expense: any) => (
-                  <TableRow key={expense.id}>
-                    <TableCell className="font-medium max-w-[200px] truncate">{expense.description || "-"}</TableCell>
-                    <TableCell>{expense.category || "-"}</TableCell>
-                    <TableCell className="font-bold text-destructive">
-                      {expense.amount ? formatCurrency(expense.amount) : "-"}
-                    </TableCell>
-                    <TableCell>{expense.date ? format(new Date(expense.date), "dd/MM/yyyy", { locale: ptBR }) : "-"}</TableCell>
-                    <TableCell>{expense.frequency || "Única"}</TableCell>
-                    <TableCell>
-                      <Badge variant={expense.status === "PAGO" ? "default" : expense.status === "PENDENTE" ? "destructive" : "secondary"}>
-                        {expense.status || "PENDENTE"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          
+          {selectedCard === "expense" ? (
+            <div className="space-y-6">
+              {/* Explicação do Cálculo */}
+              <div className="bg-destructive/5 border-2 border-destructive/20 rounded-lg p-4 space-y-3">
+                <h3 className="font-bold text-lg text-foreground">Como é calculado o Valor Total de Despesas?</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Fórmula:</span>
+                    <span className="bg-card px-2 py-1 rounded border border-border">
+                      Soma de todas as despesas do ano {financialStats.currentYear}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 pt-2 border-t border-border/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total de despesas encontradas:</span>
+                      <span className="font-semibold">{financialStats.expensesThisYear.length} {financialStats.expensesThisYear.length === 1 ? "despesa" : "despesas"}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t-2 border-destructive/30">
+                      <span className="font-bold text-lg">Valor Total de Despesas:</span>
+                      <span className="font-bold text-lg text-destructive">{formatCurrency(financialStats.totalExpenses)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de Despesas */}
+              <div className="space-y-3">
+                <h3 className="font-bold text-lg text-foreground">Despesas que compõem o total ({financialStats.expensesThisYear.length}):</h3>
+                <div className="max-h-[400px] overflow-y-auto border border-border/30 rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {financialStats.expensesThisYear.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            Nenhuma despesa encontrada para o ano {financialStats.currentYear}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        financialStats.expensesThisYear.map((expense: any) => (
+                          <TableRow key={expense.id}>
+                            <TableCell className="text-xs">
+                              {expense.date ? (() => {
+                                const date = new Date(expense.date);
+                                return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                              })() : "-"}
+                            </TableCell>
+                            <TableCell className="font-medium text-xs max-w-[200px] truncate">{expense.description || "-"}</TableCell>
+                            <TableCell className="text-xs">{expense.category || "-"}</TableCell>
+                            <TableCell className="text-xs">
+                              <Badge variant={expense.status === "PAGO" ? "default" : expense.status === "PENDENTE" ? "destructive" : "secondary"} className="text-[10px]">
+                                {expense.status || "PENDENTE"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-destructive text-xs">
+                              {formatCurrency(expense.amount || 0)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Explicação do Cálculo */}
+              <div className="bg-primary/5 border-2 border-primary/20 rounded-lg p-4 space-y-3">
+                <h3 className="font-bold text-lg text-foreground">Como é calculado o Saldo?</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Fórmula:</span>
+                    <span className="bg-card px-2 py-1 rounded border border-border">
+                      Total de Receitas - Total de Despesas = Saldo
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 pt-2 border-t border-border/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total de Receitas ({financialStats.currentYear}):</span>
+                      <span className="font-semibold text-success">{formatCurrency(financialStats.totalRevenue)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Total de Despesas ({financialStats.currentYear}):</span>
+                      <span className="font-semibold text-destructive">{formatCurrency(financialStats.totalExpenses)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t-2 border-primary/30">
+                      <span className="font-bold text-lg">Cálculo:</span>
+                      <span className="font-semibold text-primary">
+                        {formatCurrency(financialStats.totalRevenue)} - {formatCurrency(financialStats.totalExpenses)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t-2 border-primary/30">
+                      <span className="font-bold text-lg">Saldo Final:</span>
+                      <span className={`font-bold text-lg ${financialStats.saldo >= 0 ? 'text-success' : 'text-destructive'}`}>
+                        {formatCurrency(financialStats.saldo)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h3 className="font-bold text-lg text-success">Receitas ({financialStats.revenuesThisYear.length}):</h3>
+                  <div className="max-h-[300px] overflow-y-auto border border-border/30 rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Data</TableHead>
+                          <TableHead className="text-xs">Descrição</TableHead>
+                          <TableHead className="text-xs text-right">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {financialStats.revenuesThisYear.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-4 text-muted-foreground text-xs">
+                              Nenhuma receita
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          financialStats.revenuesThisYear.map((revenue: any) => (
+                            <TableRow key={revenue.id}>
+                              <TableCell className="text-xs">
+                                {revenue.date ? (() => {
+                                  const date = new Date(revenue.date);
+                                  return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                                })() : "-"}
+                              </TableCell>
+                              <TableCell className="font-medium text-xs max-w-[150px] truncate">{revenue.description || "-"}</TableCell>
+                              <TableCell className="text-right font-bold text-success text-xs">
+                                {formatCurrency(revenue.amount || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="font-bold text-lg text-destructive">Despesas ({financialStats.expensesThisYear.length}):</h3>
+                  <div className="max-h-[300px] overflow-y-auto border border-border/30 rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Data</TableHead>
+                          <TableHead className="text-xs">Descrição</TableHead>
+                          <TableHead className="text-xs text-right">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {financialStats.expensesThisYear.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-4 text-muted-foreground text-xs">
+                              Nenhuma despesa
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          financialStats.expensesThisYear.map((expense: any) => (
+                            <TableRow key={expense.id}>
+                              <TableCell className="text-xs">
+                                {expense.date ? (() => {
+                                  const date = new Date(expense.date);
+                                  return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+                                })() : "-"}
+                              </TableCell>
+                              <TableCell className="font-medium text-xs max-w-[150px] truncate">{expense.description || "-"}</TableCell>
+                              <TableCell className="text-right font-bold text-destructive text-xs">
+                                {formatCurrency(expense.amount || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta despesa? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
