@@ -20,7 +20,20 @@ import {
   Legend
 } from "recharts";
 
-const COLORS = ['hsl(var(--success))', 'hsl(var(--destructive))', 'hsl(var(--primary))', 'hsl(var(--warning))'];
+const COLORS_EXTENDED = [
+  'hsl(var(--success))', 
+  'hsl(var(--destructive))', 
+  'hsl(var(--primary))', 
+  'hsl(var(--warning))',
+  '#8B5CF6', // Roxo
+  '#EC4899', // Rosa
+  '#06B6D4', // Ciano
+  '#84CC16', // Verde limão
+  '#F97316', // Laranja escuro
+  '#6366F1', // Índigo
+  '#14B8A6', // Teal
+  '#F59E0B'  // Âmbar
+];
 
 export default function BusinessGrowth() {
   const navigate = useNavigate();
@@ -107,12 +120,16 @@ export default function BusinessGrowth() {
     }).format(value);
   };
 
-  const statusData = [
-    { name: "Pendente", value: costIdeas.filter((i: any) => i.status === "pendente").length + revenueIdeas.filter((i: any) => i.status === "pendente").length },
-    { name: "Em Análise", value: costIdeas.filter((i: any) => i.status === "em_analise").length + revenueIdeas.filter((i: any) => i.status === "em_analise").length },
-    { name: "Aprovada", value: costIdeas.filter((i: any) => i.status === "aprovada").length + revenueIdeas.filter((i: any) => i.status === "aprovada").length },
-    { name: "Implementada", value: stats.implementedCostIdeas + stats.implementedRevenueIdeas },
-  ];
+  const statusData = useMemo(() => {
+    const data = [
+      { name: "Pendente", value: costIdeas.filter((i: any) => i.status === "pendente").length + revenueIdeas.filter((i: any) => i.status === "pendente").length },
+      { name: "Em Análise", value: costIdeas.filter((i: any) => i.status === "em_analise").length + revenueIdeas.filter((i: any) => i.status === "em_analise").length },
+      { name: "Aprovada", value: costIdeas.filter((i: any) => i.status === "aprovada").length + revenueIdeas.filter((i: any) => i.status === "aprovada").length },
+      { name: "Implementada", value: stats.implementedCostIdeas + stats.implementedRevenueIdeas },
+    ];
+    // Filtrar apenas valores maiores que zero para melhor visualização
+    return data.filter(item => item.value > 0);
+  }, [costIdeas, revenueIdeas, stats.implementedCostIdeas, stats.implementedRevenueIdeas]);
 
   const categoryData = useMemo(() => {
     const categories: Record<string, number> = {};
@@ -302,26 +319,45 @@ export default function BusinessGrowth() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            {statusData && statusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent, value }) => {
+                      // Só mostra label se a fatia for maior que 3% ou se houver valor
+                      if (percent < 0.03 && value === 0) return '';
+                      return `${name}: ${(percent * 100).toFixed(0)}%`;
+                    }}
+                    outerRadius={100}
+                    innerRadius={30}
+                    fill="#8884d8"
+                    dataKey="value"
+                    paddingAngle={2}
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS_EXTENDED[index % COLORS_EXTENDED.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: any, name: string) => [`${value} ideia(s)`, name]}
+                    labelFormatter={(label) => `Status: ${label}`}
+                  />
+                  <Legend 
+                    formatter={(value) => value}
+                    wrapperStyle={{ paddingTop: '20px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <BarChart3 className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-sm">Nenhuma ideia cadastrada</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -333,15 +369,47 @@ export default function BusinessGrowth() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={categoryData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="hsl(var(--primary))" />
-              </BarChart>
-            </ResponsiveContainer>
+            {categoryData && categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={categoryData} margin={{ top: 5, right: 30, left: 0, bottom: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted/20" />
+                  <XAxis 
+                    dataKey="name" 
+                    angle={-45} 
+                    textAnchor="end" 
+                    height={100}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  />
+                  <YAxis 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    formatter={(value: any) => [`${value} ideia(s)`, 'Quantidade']}
+                    labelFormatter={(label) => `Categoria: ${label}`}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--popover))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '0.75rem'
+                    }}
+                  />
+                  <Bar 
+                    dataKey="value" 
+                    fill="hsl(var(--primary))" 
+                    radius={[8, 8, 0, 0]}
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS_EXTENDED[index % COLORS_EXTENDED.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <BarChart3 className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-sm">Nenhuma categoria cadastrada</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

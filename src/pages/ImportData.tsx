@@ -338,7 +338,7 @@ const ImportData = () => {
   };
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="w-full max-w-full overflow-x-hidden container mx-auto p-6">
       <Card>
         <CardHeader>
           <CardTitle>Importação de Dados</CardTitle>

@@ -83,7 +83,11 @@ export default function Clientes() {
     },
     retry: 2,
     retryDelay: 1000,
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredClients, resultCount, totalCount } = useSmartSearch(
@@ -512,38 +516,38 @@ const handleEdit = (client: any) => {
       <Card className="mb-4 sm:mb-6 border-2 border-border/50 rounded-2xl shadow-elegant-lg bg-gradient-to-br from-card to-card/95">
         <CardContent className="p-3 sm:p-4 md:p-5 lg:p-6">
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="flex-1 w-full">
-                <SmartSearchInput
-                  value={searchTerm}
-                  onChange={setSearchTerm}
-                  placeholder="Buscar por nome, CPF/CNPJ, telefone, email, endereço..."
-                />
-              </div>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex-1 w-full">
+        <SmartSearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+                placeholder="Buscar por nome, CPF/CNPJ, telefone, email, endereço..."
+        />
+          </div>
               <div className="flex gap-2 flex-wrap w-full sm:w-auto">
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os Tipos</SelectItem>
-                    <SelectItem value="Pessoa Física">Pessoa Física</SelectItem>
-                    <SelectItem value="Pessoa Jurídica">Pessoa Jurídica</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Tipos</SelectItem>
+                  <SelectItem value="Pessoa Física">Pessoa Física</SelectItem>
+                  <SelectItem value="Pessoa Jurídica">Pessoa Jurídica</SelectItem>
+                </SelectContent>
+              </Select>
                 <Button onClick={handleExportPDF} className="gap-2 shadow-elegant hover:shadow-elegant-lg flex-1 sm:flex-initial">
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">Exportar PDF</span>
-                  <span className="sm:hidden">PDF</span>
-                </Button>
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Exportar PDF</span>
+                <span className="sm:hidden">PDF</span>
+              </Button>
                 <Button onClick={handleExportExcel} variant="outline" className="gap-2 shadow-sm hover:shadow-elegant flex-1 sm:flex-initial">
-                  <Download className="w-4 h-4" />
-                  <span className="hidden sm:inline">Exportar Excel</span>
-                  <span className="sm:hidden">Excel</span>
-                </Button>
-              </div>
-            </div>
-            {(searchTerm || typeFilter !== "all") && (
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Exportar Excel</span>
+                <span className="sm:hidden">Excel</span>
+              </Button>
+      </div>
+          </div>
+          {(searchTerm || typeFilter !== "all") && (
               <div className="pt-3 border-t border-border/30">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-muted-foreground">
@@ -563,8 +567,8 @@ const handleEdit = (client: any) => {
                     </Button>
                   )}
                 </div>
-              </div>
-            )}
+            </div>
+          )}
           </div>
         </CardContent>
       </Card>
@@ -572,7 +576,7 @@ const handleEdit = (client: any) => {
       {/* Tabela */}
       <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-hidden">
         <div className="overflow-x-auto">
-          <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
+        <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
           <TableHeader>
             <TableRow className="border-b-2 border-primary/30 hover:bg-transparent">
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl px-2 sm:px-4 text-xs sm:text-sm text-center min-w-[150px]">

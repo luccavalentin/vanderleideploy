@@ -6,13 +6,29 @@ import { QuickActions } from "@/components/QuickActions";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, startOfQuarter, endOfQuarter, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronRight, ChevronLeft, X, RotateCcw, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronLeft, X, RotateCcw, Loader2, FileText, Calendar as CalendarIcon, Download } from "lucide-react";
 import { TableSkeleton } from "@/components/ui/PageLoader";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function Faturamento() {
+  const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(0); // Página atual (0 = primeiros 10 meses)
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  const [pdfPeriodFilter, setPdfPeriodFilter] = useState<"mes_atual" | "mes_passado" | "trimestre" | "semestre" | "ano" | "personalizado">("ano");
+  const [pdfCustomDateRange, setPdfCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const MONTHS_PER_PAGE = isMobile ? 3 : 10; // Mobile: 3 meses, Desktop: 10
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -463,8 +479,193 @@ export default function Faturamento() {
     return normalized.replace(/\b(de|da|do|das|dos)\b\s+/gi, (match) => `${match.trim()}\u00A0`);
   };
 
+  // Gerar PDF profissional de faturamento
+  const handleGeneratePDF = async () => {
+    try {
+      toast({
+        title: "Gerando PDF...",
+        description: "Isso pode levar alguns instantes.",
+      });
+
+      // Filtrar receitas pelo período selecionado
+      const startDate = format(pdfDateRange.start, "yyyy-MM-dd");
+      const endDate = format(pdfDateRange.end, "yyyy-MM-dd");
+      
+      const { data: filteredRevenues, error } = await supabase
+        .from("revenue")
+        .select("id, date, description, category, classification, amount, status, frequency, installments, documentation_status")
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .order("date", { ascending: true });
+      
+      if (error) throw error;
+
+      // Processar dados de faturamento para o período
+      const monthsInRange: string[] = [];
+      const currentDate = new Date(pdfDateRange.start);
+      while (currentDate <= pdfDateRange.end) {
+        monthsInRange.push(format(currentDate, "yyyy-MM"));
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+
+      // Calcular faturamento por categoria e mês
+      const billingMap: Record<string, Record<string, number>> = {};
+      
+      filteredRevenues?.forEach((revenue: any) => {
+        const category = revenue.category || "Sem categoria";
+        if (!billingMap[category]) {
+          billingMap[category] = {};
+        }
+        
+        const installments = generateInstallments(revenue, monthsInRange.map(key => ({
+          key,
+          label: format(new Date(key + "-01"), "MMM/yyyy", { locale: ptBR }).toUpperCase(),
+          fullDate: new Date(key + "-01"),
+        })));
+        
+        installments.forEach(({ monthKey, amount }) => {
+          if (monthsInRange.includes(monthKey)) {
+            billingMap[category][monthKey] = (billingMap[category][monthKey] || 0) + amount;
+          }
+        });
+      });
+
+      // Criar PDF
+      const doc = new jsPDF("landscape", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 15;
+      let yPosition = margin;
+
+      // Cabeçalho profissional
+      doc.setFillColor(33, 150, 243);
+      doc.rect(0, 0, pageWidth, 40, "F");
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont("helvetica", "bold");
+      doc.text("RELATÓRIO DE FATURAMENTO", pageWidth / 2, 20, { align: "center" });
+      
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      const periodLabel = pdfPeriodFilter === "ano" 
+        ? format(pdfDateRange.start, "yyyy", { locale: ptBR })
+        : pdfPeriodFilter === "personalizado" && pdfCustomDateRange.from && pdfCustomDateRange.to
+        ? `${format(pdfCustomDateRange.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(pdfCustomDateRange.to, "dd/MM/yyyy", { locale: ptBR })}`
+        : `${format(pdfDateRange.start, "dd/MM/yyyy", { locale: ptBR })} - ${format(pdfDateRange.end, "dd/MM/yyyy", { locale: ptBR })}`;
+      doc.text(`Período: ${periodLabel}`, pageWidth / 2, 30, { align: "center" });
+      
+      doc.setTextColor(0, 0, 0);
+      yPosition = 50;
+
+      // Resumo executivo
+      const totalByCategory: Record<string, number> = {};
+      Object.entries(billingMap).forEach(([category, monthlyData]) => {
+        totalByCategory[category] = Object.values(monthlyData).reduce((sum, val) => sum + val, 0);
+      });
+      const grandTotal = Object.values(totalByCategory).reduce((sum, val) => sum + val, 0);
+
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("RESUMO EXECUTIVO", margin, yPosition);
+      yPosition += 10;
+
+      const summaryData = [
+        ["Total de Categorias", Object.keys(billingMap).length.toString()],
+        ["Total Faturado", new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(grandTotal)],
+        ["Período", periodLabel],
+        ["Data de Geração", format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })],
+      ];
+
+      autoTable(doc, {
+        startY: yPosition,
+        head: [["Item", "Valor"]],
+        body: summaryData,
+        theme: "striped",
+        headStyles: { fillColor: [33, 150, 243], textColor: 255, fontStyle: "bold" },
+        styles: { fontSize: 10 },
+        margin: { left: margin, right: margin },
+      });
+
+      yPosition = (doc as any).lastAutoTable.finalY + 15;
+
+      // Tabela de faturamento por categoria e mês
+      if (Object.keys(billingMap).length > 0) {
+        if (yPosition > pageHeight - 60) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text("FATURAMENTO POR CATEGORIA E MÊS", margin, yPosition);
+        yPosition += 10;
+
+        // Preparar cabeçalho da tabela
+        const headerRow = ["Categoria", ...monthsInRange.map(m => format(new Date(m + "-01"), "MMM/yy", { locale: ptBR }).toUpperCase()), "Total"];
+        
+        // Preparar dados
+        const tableData = Object.entries(billingMap).map(([category, monthlyData]) => {
+          const row = [category];
+          let categoryTotal = 0;
+          monthsInRange.forEach(monthKey => {
+            const amount = monthlyData[monthKey] || 0;
+            row.push(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount));
+            categoryTotal += amount;
+          });
+          row.push(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(categoryTotal));
+          return row;
+        });
+
+        // Adicionar linha de totais
+        const totalsRow = ["TOTAL"];
+        monthsInRange.forEach(monthKey => {
+          const monthTotal = Object.values(billingMap).reduce((sum, monthlyData) => {
+            return sum + (monthlyData[monthKey] || 0);
+          }, 0);
+          totalsRow.push(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(monthTotal));
+        });
+        totalsRow.push(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(grandTotal));
+        tableData.push(totalsRow);
+
+        autoTable(doc, {
+          startY: yPosition,
+          head: [headerRow],
+          body: tableData,
+          theme: "striped",
+          headStyles: { fillColor: [33, 150, 243], textColor: 255, fontStyle: "bold" },
+          styles: { fontSize: 7 },
+          margin: { left: margin, right: margin },
+          didParseCell: (data: any) => {
+            // Destacar linha de totais
+            if (data.row.index === tableData.length - 1) {
+              data.cell.styles.fontStyle = "bold";
+              data.cell.styles.fillColor = [240, 240, 240];
+            }
+          },
+        });
+      }
+
+      const fileName = `Faturamento_${periodLabel.replace(/\s+/g, "_")}_${format(new Date(), "dd-MM-yyyy")}.pdf`;
+      doc.save(fileName);
+
+      toast({
+        title: "PDF gerado com sucesso!",
+        description: "O relatório de faturamento foi salvo no seu dispositivo.",
+      });
+      
+      setPdfDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao gerar PDF",
+        description: error.message || "Ocorreu um erro ao gerar o PDF.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
-    <div className="space-y-4 sm:space-y-6 md:space-y-8 w-full max-w-full overflow-x-hidden px-0.25 sm:px-0.5 md:px-0.75">
+    <div className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <PageHeader
           title="Faturamento"
@@ -472,6 +673,15 @@ export default function Faturamento() {
           showBackButton={true}
         />
         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
+          <Button
+            onClick={() => setPdfDialogOpen(true)}
+            className="gap-2 rounded-2xl border-2 border-primary/30 bg-primary text-primary-foreground font-semibold shadow-[0_6px_18px_rgba(15,23,42,0.12)] hover:bg-primary/90 hover:shadow-[0_8px_24px_rgba(15,23,42,0.18)] transition-all duration-200"
+            size="sm"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Gerar PDF</span>
+            <span className="sm:hidden">PDF</span>
+          </Button>
           <div className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-primary/20 bg-primary/5 text-primary font-semibold text-sm shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
             <span>
               Página {currentPage + 1} de {totalPages}
@@ -727,6 +937,108 @@ export default function Faturamento() {
         </div>
       )}
 
+      {/* Dialog para gerar PDF */}
+      <Dialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gerar PDF de Faturamento</DialogTitle>
+            <DialogDescription>
+              Selecione o período para gerar o relatório de faturamento em PDF.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Período</Label>
+              <Select value={pdfPeriodFilter} onValueChange={(value: any) => setPdfPeriodFilter(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mes_atual">Mês Atual</SelectItem>
+                  <SelectItem value="mes_passado">Mês Passado</SelectItem>
+                  <SelectItem value="trimestre">Trimestre Atual</SelectItem>
+                  <SelectItem value="semestre">Semestre Atual</SelectItem>
+                  <SelectItem value="ano">Ano Atual</SelectItem>
+                  <SelectItem value="personalizado">Período Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {pdfPeriodFilter === "personalizado" && (
+              <div className="space-y-2">
+                <Label>Data Inicial</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !pdfCustomDateRange.from && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {pdfCustomDateRange.from ? (
+                        format(pdfCustomDateRange.from, "dd/MM/yyyy", { locale: ptBR })
+                      ) : (
+                        <span>Selecione a data inicial</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={pdfCustomDateRange.from}
+                      onSelect={(date) => setPdfCustomDateRange({ ...pdfCustomDateRange, from: date })}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+            
+            {pdfPeriodFilter === "personalizado" && (
+              <div className="space-y-2">
+                <Label>Data Final</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !pdfCustomDateRange.to && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {pdfCustomDateRange.to ? (
+                        format(pdfCustomDateRange.to, "dd/MM/yyyy", { locale: ptBR })
+                      ) : (
+                        <span>Selecione a data final</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={pdfCustomDateRange.to}
+                      onSelect={(date) => setPdfCustomDateRange({ ...pdfCustomDateRange, to: date })}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPdfDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleGeneratePDF} className="gap-2">
+              <Download className="h-4 w-4" />
+              Gerar PDF
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -36,7 +36,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format, addDays, addWeeks, addMonths, addYears, isBefore, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { standardizeText, handleStandardizeInput } from "@/lib/validations";
+import { standardizeText, handleStandardizeInput, normalizeConstraintValue } from "@/lib/validations";
 import * as XLSX from "xlsx";
 
 type TaskStatus = "pendente" | "em_andamento" | "concluida";
@@ -123,6 +123,9 @@ export default function Tarefas() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [showArchived, setShowArchived] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -141,10 +144,10 @@ export default function Tarefas() {
   });
 
   const { data: tasks = [], isLoading: tasksLoading, error: tasksError } = useQuery({
-    queryKey: ["tasks"],
+    queryKey: ["tasks", showArchived],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("reminders")
           .select(`
             *,
@@ -155,6 +158,14 @@ export default function Tarefas() {
               order_index
             )
           `);
+        
+        // Por padrão, mostrar apenas tarefas não arquivadas
+        // Se showArchived for true, mostrar todas
+        if (!showArchived) {
+          query = query.eq("archived", false);
+        }
+        
+        const { data, error } = await query;
         
         if (error) {
           // Se a tabela não existe (404), retorna array vazio sem erro
@@ -209,7 +220,11 @@ export default function Tarefas() {
       }
     },
     retry: false,
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   // Definitions that depend on tasks
@@ -251,15 +266,32 @@ export default function Tarefas() {
     setSelectedTasks(new Set());
   }, [filterStatus, filterPriority, tasks]);
 
-  const filteredTasks = tasks?.filter((task: any) => {
-    const status = task.status || (task.completed ? "concluida" : "pendente");
-    const priority = task.priority || "media";
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
     
-    if (filterStatus !== "todos" && status !== filterStatus) return false;
-    if (filterPriority !== "todos" && priority !== filterPriority) return false;
-    
-    return true;
-  });
+    return tasks.filter((task: any) => {
+      const status = task.status || (task.completed ? "concluida" : "pendente");
+      const priority = task.priority || "media";
+      
+      // Filtro de status
+      if (filterStatus !== "todos" && status !== filterStatus) return false;
+      
+      // Filtro de prioridade
+      if (filterPriority !== "todos" && priority !== filterPriority) return false;
+      
+      // Filtro de busca
+      if (searchTerm && searchTerm.trim()) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        const titleMatch = task.title?.toLowerCase().includes(searchLower);
+        const descriptionMatch = task.description?.toLowerCase().includes(searchLower);
+        const categoryMatch = task.category?.toLowerCase().includes(searchLower);
+        
+        if (!titleMatch && !descriptionMatch && !categoryMatch) return false;
+      }
+      
+      return true;
+    });
+  }, [tasks, filterStatus, filterPriority, searchTerm]);
 
   // ...código já movido para o topo...
 
@@ -483,8 +515,8 @@ export default function Tarefas() {
         description: data.description ? standardizeText(data.description) : null,
         due_date: dueDate,
         completed: data.status === "concluida",
-        status: data.status,
-        priority: data.priority,
+        status: normalizeConstraintValue("reminder_status", data.status) || "pendente",
+        priority: normalizeConstraintValue("priority", data.priority) || "media",
         category: data.category ? standardizeText(data.category) : null,
         recurrence_type: data.recurrence_type || null,
         recurrence_end_date: recurrenceEndDate || null,
@@ -545,9 +577,12 @@ export default function Tarefas() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders"] });
       toast({ title: "Tarefa criada com sucesso!" });
+      setIsSubmitting(false);
       handleCloseDialog();
+    },
+    onError: () => {
+      setIsSubmitting(false);
     },
   });
 
@@ -562,8 +597,8 @@ export default function Tarefas() {
         description: data.description ? standardizeText(data.description) : null,
         due_date: dueDate,
         completed: data.status === "concluida",
-        status: data.status,
-        priority: data.priority,
+        status: normalizeConstraintValue("reminder_status", data.status) || "pendente",
+        priority: normalizeConstraintValue("priority", data.priority) || "media",
         category: data.category ? standardizeText(data.category) : null,
         use_checklist: data.use_checklist || false,
         recurrence_type: data.recurrence_type || null,
@@ -585,9 +620,12 @@ export default function Tarefas() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders"] });
       toast({ title: "Tarefa atualizada com sucesso!" });
+      setIsSubmitting(false);
       handleCloseDialog();
+    },
+    onError: () => {
+      setIsSubmitting(false);
     },
   });
 
@@ -598,7 +636,6 @@ export default function Tarefas() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders"] });
       toast({ title: "Tarefa excluída com sucesso!" });
     },
   });
@@ -611,7 +648,6 @@ export default function Tarefas() {
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders"] });
       setSelectedTasks(new Set());
       toast({ 
         title: "Tarefas excluídas com sucesso!", 
@@ -638,7 +674,6 @@ export default function Tarefas() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders"] });
     },
   });
 
@@ -657,6 +692,8 @@ export default function Tarefas() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return; // Prevenir duplo clique
+    setIsSubmitting(true);
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: formData });
     } else {
@@ -695,7 +732,7 @@ export default function Tarefas() {
             order_index: item.order_index || 0,
           }))
       : [];
-
+    
     setFormData({
       title: task.title,
       description: task.description || "",
@@ -739,6 +776,7 @@ export default function Tarefas() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingId(null);
+    setIsSubmitting(false);
     setFormData({
       title: "",
       description: "",
@@ -801,7 +839,7 @@ export default function Tarefas() {
   };
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <PageHeader
         title="Gestão de Tarefas"
         description="Organize e acompanhe todas as suas tarefas e atividades"
@@ -812,30 +850,52 @@ export default function Tarefas() {
       />
 
 
+      {/* Busca e Filtros */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-4 sm:mb-6 w-full max-w-full">
+        <div className="flex-1 w-full">
+          <SmartSearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Buscar tarefas por título, descrição ou categoria..."
+            className="w-full"
+          />
+        </div>
+        <div className="flex gap-2 items-center">
+          <Button
+            variant={showArchived ? "default" : "outline"}
+            onClick={() => setShowArchived(!showArchived)}
+            className="whitespace-nowrap"
+          >
+            {showArchived ? "Ocultar Arquivadas" : "Mostrar Arquivadas"}
+          </Button>
+        </div>
+      </div>
+
       {/* Ações rápidas + paginação alinhada à direita */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div className="flex-1">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 sm:mb-6 w-full max-w-full">
+        <div className="flex-1 w-full max-w-full">
           <QuickActions />
         </div>
-        <div className="flex gap-2 justify-end md:justify-end">
-          <span className="px-4 py-2 rounded-lg bg-white shadow text-muted-foreground font-medium text-sm border border-muted">Página 1 de 2</span>
-          <Button variant="outline" className="px-2 py-1 rounded-lg shadow font-medium text-xs">
-            Próximo &rarr;
+        <div className="flex gap-2 justify-end md:justify-end w-full md:w-auto">
+          <span className="px-3 sm:px-4 py-2 rounded-lg bg-white shadow text-muted-foreground font-medium text-xs sm:text-sm border border-muted whitespace-nowrap">Página 1 de 2</span>
+          <Button variant="outline" className="px-2 sm:px-3 py-1 sm:py-2 rounded-lg shadow font-medium text-xs whitespace-nowrap">
+            <span className="hidden sm:inline">Próximo</span>
+            <span className="sm:hidden">→</span>
           </Button>
         </div>
       </div>
 
       {/* Dashboards e Analíticos de Tarefas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8 w-full max-w-full">
         {/* Gráfico de Status */}
-        <Card className="border-0 shadow-elegant bg-gradient-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+        <Card className="border-0 shadow-elegant bg-gradient-card w-full max-w-full">
+          <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               Status das Tarefas
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={180}>
+          <CardContent className="p-3 sm:p-6">
+            <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 640 ? 200 : 180}>
               <PieChart>
                 <Pie
                   data={statusPieData}
@@ -867,14 +927,14 @@ export default function Tarefas() {
         </Card>
 
         {/* Gráfico de Prioridade */}
-        <Card className="border-0 shadow-elegant bg-gradient-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+        <Card className="border-0 shadow-elegant bg-gradient-card w-full max-w-full">
+          <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               Prioridade das Tarefas
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={180}>
+          <CardContent className="p-3 sm:p-6">
+            <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 640 ? 200 : 180}>
               <PieChart>
                 <Pie
                   data={priorityPieData}
@@ -906,14 +966,14 @@ export default function Tarefas() {
         </Card>
 
         {/* Gráfico de Tarefas por Mês */}
-        <Card className="border-0 shadow-elegant bg-gradient-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+        <Card className="border-0 shadow-elegant bg-gradient-card w-full max-w-full">
+          <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               Tarefas Criadas por Mês
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={180}>
+          <CardContent className="p-3 sm:p-6">
+            <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 640 ? 200 : 180}>
               <BarChart data={tasksByMonth}>
                 <XAxis dataKey="month" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                 <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
@@ -1161,39 +1221,39 @@ export default function Tarefas() {
             else if (status === "pendente") bgGradient = "bg-gradient-to-br from-warning/10 via-background to-white";
 
             return (
-              <Card
-                key={task.id}
-                className={`border-2 ${borderColor} shadow-elegant hover:shadow-elegant-lg transition-all duration-300 ${bgGradient} cursor-pointer hover:scale-[1.03] active:scale-[0.98] rounded-xl ${status === "concluida" ? "opacity-60" : ""}`}
-                onClick={() => handleEdit(task)}
-              >
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className={`font-bold text-lg truncate ${status === "concluida" ? "line-through" : ""}`}>{task.title}</span>
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => handleToggleSelectTask(task.id)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <Badge className={`text-xs ${statusColors[status]}`}>{statusLabels[status]}</Badge>
-                    <Badge className={`text-xs ${priorityColors[priority]}`}>{priorityLabels[priority]}</Badge>
-                    {overdue && <Badge className="text-xs bg-destructive/20 text-destructive">Atrasada</Badge>}
-                    {task.category && <Badge variant="outline" className="text-xs">{task.category}</Badge>}
-                    {task.recurrence_type && (
-                      <Badge variant="outline" className="capitalize text-xs">
-                        {task.recurrence_type === "diaria" && "Diária"}
-                        {task.recurrence_type === "semanal" && "Semanal"}
-                        {task.recurrence_type === "mensal" && "Mensal"}
-                        {task.recurrence_type === "anual" && "Anual"}
-                        {task.recurrence_type === "personalizada" && "Personalizada"}
-                        {task.recurrence_interval > 1 && ` (a cada ${task.recurrence_interval})`}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {task.description || "-"}
-                  </div>
+                <Card
+                  key={task.id}
+                  className={`border-2 ${borderColor} shadow-elegant hover:shadow-elegant-lg transition-all duration-300 ${bgGradient} cursor-pointer hover:scale-[1.03] active:scale-[0.98] rounded-xl ${status === "concluida" ? "opacity-60" : ""}`}
+                  onClick={() => handleEdit(task)}
+                >
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className={`font-bold text-lg truncate ${status === "concluida" ? "line-through" : ""}`}>{task.title}</span>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => handleToggleSelectTask(task.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <Badge className={`text-xs ${statusColors[status]}`}>{statusLabels[status]}</Badge>
+                      <Badge className={`text-xs ${priorityColors[priority]}`}>{priorityLabels[priority]}</Badge>
+                      {overdue && <Badge className="text-xs bg-destructive/20 text-destructive">Atrasada</Badge>}
+                      {task.category && <Badge variant="outline" className="text-xs">{task.category}</Badge>}
+                      {task.recurrence_type && (
+                        <Badge variant="outline" className="capitalize text-xs">
+                          {task.recurrence_type === "diaria" && "Diária"}
+                          {task.recurrence_type === "semanal" && "Semanal"}
+                          {task.recurrence_type === "mensal" && "Mensal"}
+                          {task.recurrence_type === "anual" && "Anual"}
+                          {task.recurrence_type === "personalizada" && "Personalizada"}
+                          {task.recurrence_interval > 1 && ` (a cada ${task.recurrence_interval})`}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground truncate">
+                      {task.description || "-"}
+                    </div>
                   {/* Exibir Checklist se houver */}
                   {task.use_checklist && task.task_checklist_items && task.task_checklist_items.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-border/30">
@@ -1223,62 +1283,62 @@ export default function Tarefas() {
                       </div>
                     </div>
                   )}
-                  <div className="flex items-center justify-between mt-2">
-                    <span className={`text-xs font-medium ${overdue ? "text-destructive" : ""}`}>
-                      Vencimento: {task.due_date ? format(new Date(task.due_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
-                    </span>
-                    <div className="flex gap-1">
-                      <IconButton
-                        icon={Pencil}
+                    <div className="flex items-center justify-between mt-2">
+                      <span className={`text-xs font-medium ${overdue ? "text-destructive" : ""}`}>
+                        Vencimento: {task.due_date ? format(new Date(task.due_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
+                      </span>
+                      <div className="flex gap-1">
+                        <IconButton
+                          icon={Pencil}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEdit(task);
                         }}
-                        variant="edit"
-                      />
-                      <IconButton
-                        icon={Trash2}
+                          variant="edit"
+                        />
+                        <IconButton
+                          icon={Trash2}
                         onClick={(e) => {
                           e.stopPropagation();
                           setTaskToDelete(task.id);
                         }}
-                        variant="delete"
-                      />
+                          variant="delete"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
             );
             })}
           </>
         )}
       </div>
 
-      {/* Dialog de confirmação de exclusão individual */}
+                {/* Dialog de confirmação de exclusão individual */}
       <AlertDialog open={taskToDelete !== null} onOpenChange={(open) => !open && setTaskToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Tarefa</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir Tarefa</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
               onClick={() => {
                 if (taskToDelete) {
                   deleteMutation.mutate(taskToDelete);
                   setTaskToDelete(null);
                 }
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
 
       {/* Dialog de Criação/Edição */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -1311,7 +1371,7 @@ export default function Tarefas() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="description">Descrição</Label>
+              <Label htmlFor="description">Descrição</Label>
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="use_checklist"
@@ -1517,8 +1577,8 @@ export default function Tarefas() {
               <Button type="button" variant="outline" onClick={handleCloseDialog}>
                 Cancelar
               </Button>
-              <Button type="submit">
-                {editingId ? "Atualizar" : "Criar"}
+              <Button type="submit" disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}>
+                {isSubmitting || createMutation.isPending || updateMutation.isPending ? "Salvando..." : (editingId ? "Atualizar" : "Criar")}
               </Button>
             </div>
           </form>

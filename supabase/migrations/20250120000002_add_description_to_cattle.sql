@@ -8,3 +8,4 @@ ADD COLUMN IF NOT EXISTS description TEXT;
 COMMENT ON COLUMN public.cattle.description IS 'Descrição do lote de gado';
 
 
+

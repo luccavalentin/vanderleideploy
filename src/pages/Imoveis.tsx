@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatsCard } from "@/components/layout/StatsCard";
 import { QuickActions } from "@/components/QuickActions";
-import { Building2, Download, CheckCircle2, XCircle, DollarSign, FileText } from "lucide-react";
+import { Building2, Download, CheckCircle2, XCircle, DollarSign, FileText, Key, Home, TrendingUp, Percent, AlertCircle } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
@@ -54,11 +55,15 @@ import {
   parseCurrency,
   formatCurrencyInput,
   formatCurrency,
+  normalizeConstraintValue,
 } from "@/lib/validations";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollIndicator } from "@/components/ui/ScrollIndicator";
 import * as XLSX from "xlsx";
 
 export default function Imoveis() {
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -69,6 +74,9 @@ export default function Imoveis() {
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Ler parâmetro de tipo da URL
+  const tipoFilter = searchParams.get("tipo") || "";
 
   const [formData, setFormData] = useState({
     address: "",
@@ -87,6 +95,7 @@ export default function Imoveis() {
     rent_adjustment_type: "",
     rent_adjustment_value: "",
     is_rental: false, // Imóvel de Locação
+    monthly_rent: "", // Valor da Locação Mensal
     // Campos para gerar despesa
     create_expense: false,
     parcel_expense: false,
@@ -104,8 +113,40 @@ export default function Imoveis() {
       if (error) throw error;
       return data;
     },
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
+
+  // Buscar receitas vinculadas a imóveis para identificar inquilinos e calcular renda
+  const { data: revenues } = useQuery({
+    queryKey: ["revenues"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("revenue")
+        .select("id, property_id, client_id, amount, frequency, date, description")
+        .not("property_id", "is", null);
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
+  });
+
+  // Criar mapa de imóveis com inquilinos (receitas vinculadas)
+  const propertiesWithTenants = useMemo(() => {
+    if (!revenues) return new Set<string>();
+    return new Set(
+      revenues
+        .filter((r: any) => r.property_id && r.client_id)
+        .map((r: any) => r.property_id)
+    );
+  }, [revenues]);
 
   const {
     searchTerm,
@@ -128,6 +169,35 @@ export default function Imoveis() {
     if (!filteredProperties) return [];
     let result = filteredProperties;
     
+    // Filtro por tipo (locacao ou venda)
+    if (tipoFilter === "locacao") {
+      result = result.filter((p: any) => {
+        // Considera como locação se:
+        // 1. is_rental === true OU
+        // 2. Tem contract_start preenchido OU
+        // 3. Tem contract_end preenchido OU
+        // 4. Tem receitas vinculadas (indicando inquilino) OU
+        // 5. Tem water_ownership ou energy_ownership = TERCEIROS (INQUILINO)
+        const hasContract = p.contract_start || p.contract_end;
+        const hasTenant = propertiesWithTenants.has(p.id);
+        const hasInquilino = p.water_ownership === "TERCEIROS" || p.energy_ownership === "TERCEIROS";
+        return p.is_rental === true || hasContract || hasTenant || hasInquilino;
+      });
+    } else if (tipoFilter === "venda") {
+      result = result.filter((p: any) => {
+        // Considera como venda se:
+        // 1. is_rental === false/null E
+        // 2. NÃO tem contract_start E
+        // 3. NÃO tem contract_end E
+        // 4. NÃO tem receitas vinculadas E
+        // 5. NÃO tem water_ownership ou energy_ownership = TERCEIROS (INQUILINO)
+        const hasContract = p.contract_start || p.contract_end;
+        const hasTenant = propertiesWithTenants.has(p.id);
+        const hasInquilino = p.water_ownership === "TERCEIROS" || p.energy_ownership === "TERCEIROS";
+        return (p.is_rental === false || p.is_rental === null) && !hasContract && !hasTenant && !hasInquilino;
+      });
+    }
+    
     if (statusFilter !== "all") {
       result = result.filter((p: any) => p.documentation_status === statusFilter);
     }
@@ -140,7 +210,14 @@ export default function Imoveis() {
     }
     
     return result;
-  }, [filteredProperties, statusFilter, cityFilter]);
+  }, [filteredProperties, statusFilter, cityFilter, tipoFilter, propertiesWithTenants]);
+  
+  // Aplicar filtro de tipo quando o parâmetro da URL mudar
+  useEffect(() => {
+    if (tipoFilter) {
+      // O filtro já está sendo aplicado no useMemo acima
+    }
+  }, [tipoFilter]);
 
   // Lista de cidades únicas para filtro
   const uniqueCities = useMemo(() => {
@@ -158,7 +235,79 @@ export default function Imoveis() {
   const { sortedData: sortedProperties, SortButton } =
     useTableSort(filteredByFilters);
 
-  // Estatísticas
+  // Estatísticas gerais (para tela inicial sem filtro)
+  const generalStats = useMemo(() => {
+    if (!properties || !revenues) return {
+      total: 0,
+      forRental: 0,
+      rented: 0,
+      available: 0,
+      monthlyRevenue: 0,
+      occupancyRate: 0,
+      paid: 0,
+      pending: 0,
+      totalValue: 0,
+    };
+
+    // Imóveis para locação
+    const rentalProperties = properties.filter((p: any) => {
+      const hasContract = p.contract_start || p.contract_end;
+      const hasTenant = propertiesWithTenants.has(p.id);
+      const hasInquilino = p.water_ownership === "TERCEIROS" || p.energy_ownership === "TERCEIROS";
+      return p.is_rental === true || hasContract || hasTenant || hasInquilino;
+    });
+
+    // Imóveis alugados
+    const today = new Date();
+    const rentedProperties = rentalProperties.filter((p: any) => {
+      const hasActiveContract = p.contract_end && new Date(p.contract_end) >= today;
+      const hasTenant = propertiesWithTenants.has(p.id);
+      return hasActiveContract || hasTenant;
+    });
+
+    // Renda mensal total
+    const monthlyRentFromProperties = rentedProperties.reduce((sum: number, p: any) => {
+      return sum + (Number(p.monthly_rent) || 0);
+    }, 0);
+
+    const rentalRevenues = revenues.filter((r: any) => {
+      if (!r.property_id) return false;
+      const property = rentalProperties.find((p: any) => p.id === r.property_id);
+      if (!property) return false;
+      return r.frequency === "Mensal" || r.property_id;
+    });
+
+    const monthlyRevenues = rentalRevenues.filter((r: any) => r.frequency === "Mensal");
+    const monthlyRevenueFromRevenues = monthlyRevenues.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+
+    const propertiesWithoutMonthlyRent = rentedProperties.filter((p: any) => !p.monthly_rent || Number(p.monthly_rent) === 0);
+    const revenuesFromPropertiesWithoutRent = monthlyRevenues.filter((r: any) => 
+      propertiesWithoutMonthlyRent.some((p: any) => p.id === r.property_id)
+    );
+    const additionalRevenue = revenuesFromPropertiesWithoutRent.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+    
+    const calculatedMonthlyRevenue = monthlyRentFromProperties + additionalRevenue;
+
+    const total = properties.length;
+    const forRental = rentalProperties.length;
+    const rented = rentedProperties.length;
+    const available = forRental - rented;
+    const occupancyRate = forRental > 0 ? (rented / forRental) * 100 : 0;
+
+    return {
+      total,
+      forRental,
+      rented,
+      available,
+      monthlyRevenue: calculatedMonthlyRevenue,
+      occupancyRate,
+      paid: properties.filter((p: any) => p.documentation_status === "PAGO").length,
+      pending: properties.filter((p: any) => p.documentation_status === "PENDENTE").length,
+      totalValue: properties.reduce((sum: number, p: any) => sum + (p.venal_value || 0), 0),
+    };
+  }, [properties, revenues, propertiesWithTenants]);
+
+  // Estatísticas gerais (para compatibilidade com código existente)
   const stats = useMemo(() => {
     if (!properties) return { 
       total: 0, 
@@ -176,6 +325,112 @@ export default function Imoveis() {
       withContract: properties.filter((p: any) => p.contract_start && p.contract_end).length,
     };
   }, [properties]);
+
+  // Estatísticas específicas para locação
+  const rentalStats = useMemo(() => {
+    if (!properties || !revenues) return {
+      total: 0,
+      rented: 0,
+      available: 0,
+      monthlyRevenue: 0,
+      occupancyRate: 0,
+    };
+
+    // Filtrar imóveis de locação (mesma lógica do filtro)
+    const rentalProperties = properties.filter((p: any) => {
+      const hasContract = p.contract_start || p.contract_end;
+      const hasTenant = propertiesWithTenants.has(p.id);
+      const hasInquilino = p.water_ownership === "TERCEIROS" || p.energy_ownership === "TERCEIROS";
+      return p.is_rental === true || hasContract || hasTenant || hasInquilino;
+    });
+
+    // Imóveis alugados (com contrato ativo ou receitas recentes)
+    const today = new Date();
+    const rentedProperties = rentalProperties.filter((p: any) => {
+      const hasActiveContract = p.contract_end && new Date(p.contract_end) >= today;
+      const hasTenant = propertiesWithTenants.has(p.id);
+      return hasActiveContract || hasTenant;
+    });
+
+    // Calcular renda mensal total
+    // PRIMEIRO: Soma os valores de monthly_rent dos imóveis alugados
+    const monthlyRentFromProperties = rentedProperties.reduce((sum: number, p: any) => {
+      return sum + (Number(p.monthly_rent) || 0);
+    }, 0);
+
+    // SEGUNDO: Considera receitas mensais vinculadas a imóveis de locação (como complemento)
+    const rentalRevenues = revenues.filter((r: any) => {
+      if (!r.property_id) return false;
+      const property = rentalProperties.find((p: any) => p.id === r.property_id);
+      if (!property) return false;
+      
+      // Verifica se é receita de aluguel/locação pela descrição ou categoria
+      const description = (r.description || "").toLowerCase();
+      const category = (r.category || "").toLowerCase();
+      const isRentalRevenue = 
+        description.includes("aluguel") || 
+        description.includes("locação") || 
+        description.includes("locacao") ||
+        category.includes("aluguel") ||
+        category.includes("locação") ||
+        category.includes("locacao");
+      
+      return isRentalRevenue || r.property_id; // Se está vinculada a imóvel, considera
+    });
+
+    // Receitas mensais explícitas
+    const monthlyRevenues = rentalRevenues.filter((r: any) => r.frequency === "Mensal");
+    const monthlyRevenueFromRevenues = monthlyRevenues.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+
+    // Se não houver receitas mensais explícitas, calcula pela média das receitas recentes
+    const recentRevenues = rentalRevenues.filter((r: any) => {
+      const revenueDate = new Date(r.date);
+      const monthsAgo = (today.getTime() - revenueDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+      return monthsAgo <= 3; // Últimos 3 meses
+    });
+
+    let calculatedMonthlyRevenueFromRevenues = monthlyRevenueFromRevenues;
+    if (monthlyRevenueFromRevenues === 0 && recentRevenues.length > 0) {
+      // Calcula média mensal das receitas recentes
+      const totalRecent = recentRevenues.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+      const uniqueProperties = new Set(recentRevenues.map((r: any) => r.property_id));
+      // Se há receitas recentes, calcula média mensal
+      calculatedMonthlyRevenueFromRevenues = totalRecent / Math.max(uniqueProperties.size, 1);
+    } else if (monthlyRevenueFromRevenues === 0 && rentalRevenues.length > 0) {
+      // Se não há receitas recentes mas há receitas vinculadas, usa a última receita como referência
+      const lastRevenue = rentalRevenues
+        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      if (lastRevenue) {
+        calculatedMonthlyRevenueFromRevenues = Number(lastRevenue.amount) || 0;
+      }
+    }
+
+    // Soma o valor dos imóveis (prioritário) com as receitas (complementar)
+    // Se o imóvel já tem monthly_rent cadastrado, não soma receitas duplicadas
+    let calculatedMonthlyRevenue = monthlyRentFromProperties;
+    
+    // Adiciona receitas apenas de imóveis que não têm monthly_rent cadastrado
+    const propertiesWithoutMonthlyRent = rentedProperties.filter((p: any) => !p.monthly_rent || Number(p.monthly_rent) === 0);
+    const revenuesFromPropertiesWithoutRent = monthlyRevenues.filter((r: any) => 
+      propertiesWithoutMonthlyRent.some((p: any) => p.id === r.property_id)
+    );
+    const additionalRevenue = revenuesFromPropertiesWithoutRent.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+    
+    calculatedMonthlyRevenue = monthlyRentFromProperties + additionalRevenue;
+
+    const total = rentalProperties.length;
+    const rented = rentedProperties.length;
+    const available = total - rented;
+    const occupancyRate = total > 0 ? (rented / total) * 100 : 0;
+
+    return {
+      total,
+      rented,
+      available,
+      monthlyRevenue: calculatedMonthlyRevenue,
+      occupancyRate,
+    };
+  }, [properties, revenues, propertiesWithTenants]);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -521,17 +776,9 @@ export default function Imoveis() {
           : null,
         contract_start: formData.contract_start || null,
         contract_end: formData.contract_end || null,
-        documentation_status: formData.documentation_status || null,
-        water_ownership:
-          formData.water_ownership &&
-          ["PROPRIO", "TERCEIROS"].includes(formData.water_ownership)
-            ? formData.water_ownership
-            : null,
-        energy_ownership:
-          formData.energy_ownership &&
-          ["PROPRIO", "TERCEIROS"].includes(formData.energy_ownership)
-            ? formData.energy_ownership
-            : null,
+        documentation_status: normalizeConstraintValue("documentation_status", formData.documentation_status),
+        water_ownership: normalizeConstraintValue("water_ownership", formData.water_ownership),
+        energy_ownership: normalizeConstraintValue("energy_ownership", formData.energy_ownership),
         outstanding_bills: formData.outstanding_bills || null,
         municipal_registration: formData.municipal_registration
           ? standardizeText(formData.municipal_registration)
@@ -544,6 +791,9 @@ export default function Imoveis() {
           : null,
         rent_adjustment_type: formData.rent_adjustment_type || null,
         is_rental: formData.is_rental || false,
+        monthly_rent: formData.monthly_rent
+          ? parseCurrency(formData.monthly_rent)
+          : null,
       };
 
       // Adiciona number e complement
@@ -612,6 +862,9 @@ export default function Imoveis() {
         ? property.rent_adjustment_text || ""
         : property.rent_adjustment_percentage?.toString() || "",
       is_rental: property.is_rental || false,
+      monthly_rent: property.monthly_rent
+        ? formatCurrencyInput(property.monthly_rent)
+        : "",
       create_expense: false,
       parcel_expense: false,
       expense_due_date: "",
@@ -641,6 +894,7 @@ export default function Imoveis() {
       rent_adjustment_type: "",
       rent_adjustment_value: "",
       is_rental: false,
+      monthly_rent: "",
       create_expense: false,
       parcel_expense: false,
       expense_due_date: "",
@@ -668,6 +922,7 @@ export default function Imoveis() {
       rent_adjustment_type: "",
       rent_adjustment_value: "",
       is_rental: false,
+      monthly_rent: "",
       create_expense: false,
       parcel_expense: false,
       expense_due_date: "",
@@ -680,8 +935,12 @@ export default function Imoveis() {
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       <PageHeader
-        title="Imóveis"
-        description="Gerencie todos os imóveis e propriedades"
+        title={tipoFilter === "locacao" ? "Imóveis para Locação" : 
+               tipoFilter === "venda" ? "Imóveis para Venda" : 
+               "Gestão de Imóveis"}
+        description={tipoFilter === "locacao" ? "Gerencie imóveis destinados à locação" : 
+                     tipoFilter === "venda" ? "Gerencie imóveis destinados à venda" : 
+                     "Visão geral e gestão completa de todos os seus imóveis"}
         action={{
           label: "Novo Imóvel",
           onClick: handleNewItem,
@@ -690,13 +949,100 @@ export default function Imoveis() {
 
       <QuickActions />
 
-      {/* Cards de Estatísticas */}
+      {/* Cards de Estatísticas - Tela Inicial (sem filtro) */}
+      {!tipoFilter ? (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 w-full">
         <StatsCard
           title="Total de Imóveis"
-          value={stats.total.toString()}
+            value={generalStats.total.toString()}
           icon={Building2}
-          className="bg-gradient-to-br from-primary/10 to-primary/5"
+            variant="default"
+            onClick={() => {
+              setSelectedStat("total");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Para Locação"
+            value={generalStats.forRental.toString()}
+            icon={Key}
+            variant="default"
+            onClick={() => {
+              setSelectedStat("forRental");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Locados"
+            value={generalStats.rented.toString()}
+            icon={CheckCircle2}
+            variant="success"
+            onClick={() => {
+              setSelectedStat("rented");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Disponíveis"
+            value={generalStats.available.toString()}
+            icon={Home}
+            variant="default"
+            onClick={() => {
+              setSelectedStat("available");
+              setDetailsDialogOpen(true);
+            }}
+          />
+        </div>
+      ) : tipoFilter === "locacao" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 w-full">
+          <StatsCard
+            title="Total de Imóveis"
+            value={rentalStats.total.toString()}
+            icon={Building2}
+            variant="default"
+            onClick={() => {
+              setSelectedStat("total");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Alugados"
+            value={rentalStats.rented.toString()}
+            icon={Key}
+            variant="success"
+            onClick={() => {
+              setSelectedStat("rented");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Disponíveis"
+            value={rentalStats.available.toString()}
+            icon={Home}
+            variant="default"
+            onClick={() => {
+              setSelectedStat("available");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Renda Mensal"
+            value={formatCurrency(rentalStats.monthlyRevenue)}
+            icon={TrendingUp}
+            variant="warning"
+            onClick={() => {
+              setSelectedStat("revenue");
+              setDetailsDialogOpen(true);
+            }}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 w-full">
+          <StatsCard
+            title="Total de Imóveis"
+            value={stats.total.toString()}
+            icon={Building2}
+            variant="default"
           onClick={() => {
             setSelectedStat("total");
             setDetailsDialogOpen(true);
@@ -704,9 +1050,9 @@ export default function Imoveis() {
         />
         <StatsCard
           title="Documentação Paga"
-          value={stats.paid.toString()}
+            value={stats.paid.toString()}
           icon={CheckCircle2}
-          className="bg-gradient-to-br from-success/10 to-success/5"
+            variant="success"
           onClick={() => {
             setSelectedStat("paid");
             setDetailsDialogOpen(true);
@@ -714,9 +1060,9 @@ export default function Imoveis() {
         />
         <StatsCard
           title="Documentação Pendente"
-          value={stats.pending.toString()}
+            value={stats.pending.toString()}
           icon={XCircle}
-          className="bg-gradient-to-br from-destructive/10 to-destructive/5"
+            variant="destructive"
           onClick={() => {
             setSelectedStat("pending");
             setDetailsDialogOpen(true);
@@ -726,13 +1072,98 @@ export default function Imoveis() {
           title="Valor Total Venal"
           value={formatCurrency(stats.totalValue)}
           icon={DollarSign}
-          className="bg-gradient-to-br from-warning/10 to-warning/5"
+            variant="warning"
           onClick={() => {
             setSelectedStat("value");
             setDetailsDialogOpen(true);
           }}
         />
       </div>
+      )}
+
+      {/* Cards adicionais para tela inicial */}
+      {!tipoFilter && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 w-full">
+          <StatsCard
+            title="Renda Mensal Total"
+            value={formatCurrency(generalStats.monthlyRevenue)}
+            icon={TrendingUp}
+            variant="warning"
+            onClick={() => {
+              setSelectedStat("revenue");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Taxa de Ocupação"
+            value={`${generalStats.occupancyRate.toFixed(1)}%`}
+            icon={Percent}
+            variant="default"
+            onClick={() => {
+              setSelectedStat("occupancy");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Documentação Paga"
+            value={generalStats.paid.toString()}
+            icon={CheckCircle2}
+            variant="success"
+            onClick={() => {
+              setSelectedStat("paid");
+              setDetailsDialogOpen(true);
+            }}
+          />
+          <StatsCard
+            title="Valor Total Venal"
+            value={formatCurrency(generalStats.totalValue)}
+            icon={DollarSign}
+            variant="warning"
+            onClick={() => {
+              setSelectedStat("value");
+              setDetailsDialogOpen(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Alerta quando renda mensal estiver zerada */}
+      {tipoFilter === "locacao" && rentalStats.monthlyRevenue === 0 && (
+        <div className="mb-4 sm:mb-6 w-full">
+          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/20 flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-foreground mb-1">Atenção: Renda Mensal não cadastrada</p>
+                  <p className="text-sm text-muted-foreground">
+                    Cadastre o valor da locação de seus imóveis para saber sua renda mensal total. 
+                    Acesse cada imóvel e preencha o campo "Valor da Locação" quando marcar "Locar? SIM".
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Card adicional de Taxa de Ocupação para Locação */}
+      {tipoFilter === "locacao" && (
+        <div className="mb-4 sm:mb-6 w-full">
+          <StatsCard
+            title="Taxa de Ocupação"
+            value={`${rentalStats.occupancyRate.toFixed(1)}%`}
+            icon={Percent}
+            variant="default"
+            onClick={() => {
+              setSelectedStat("occupancy");
+              setDetailsDialogOpen(true);
+            }}
+          />
+        </div>
+      )}
 
       {/* Filtros e Busca */}
       <Card className="mb-4 border-2 border-border/50 rounded-2xl shadow-elegant-lg w-full max-w-full">
@@ -789,36 +1220,46 @@ export default function Imoveis() {
         </CardContent>
       </Card>
 
-      <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-x-auto w-full">
-        <Table className="w-full border-separate border-spacing-0 min-w-[800px] sm:min-w-[1000px] md:min-w-[1200px]">
+      <div ref={tableContainerRef} className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-x-auto w-full relative">
+        <ScrollIndicator scrollContainerRef={tableContainerRef} direction="both" />
+        <Table className="w-full border-separate border-spacing-0 min-w-[600px] sm:min-w-[800px] md:min-w-[1000px] lg:min-w-[1200px]">
           <TableHeader>
             <TableRow className="border-b-2 border-primary/30 hover:bg-transparent">
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl px-1.5 sm:px-2 text-xs text-center">
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl text-xs text-center whitespace-nowrap">
                 <SortButton column="address">Endereço</SortButton>
               </TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
                 <SortButton column="city">Cidade</SortButton>
               </TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
                 <SortButton column="documentation_status">
                   Status Doc.
                 </SortButton>
               </TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
                 <SortButton column="water_ownership">Água</SortButton>
               </TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
                 <SortButton column="energy_ownership">Energia</SortButton>
               </TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Vigência Contrato</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Inscrição Municipal</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
-                <SortButton column="venal_value">Valor Venal</SortButton>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
+                <span className="hidden sm:inline">Vigência Contrato</span>
+                <span className="sm:hidden">Vig. Contrato</span>
               </TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
+                <span className="hidden sm:inline">Inscrição Municipal</span>
+                <span className="sm:hidden">Insc. Municipal</span>
+              </TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
+                <SortButton column="venal_value">
+                  <span className="hidden sm:inline">Valor Venal</span>
+                  <span className="sm:hidden">Valor</span>
+                </SortButton>
+              </TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
                 Locação
               </TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs w-16 text-center">Ações</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs w-16 text-center">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -842,11 +1283,11 @@ export default function Imoveis() {
                   }`}
                   onDoubleClick={() => handleEdit(property)}
                 >
-                  <TableCell className="font-semibold text-foreground max-w-[150px] border-r border-border/30 px-1.5 sm:px-2 text-xs text-center">
-                    <div className="flex flex-col items-center">
-                      <span className="truncate">{property.address}</span>
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 text-xs text-center break-words">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="break-words text-center">{property.address || "-"}</span>
                       {(property.number || property.complement) && (
-                        <span className="text-xs text-foreground/70 truncate font-medium">
+                        <span className="text-xs text-foreground/70 break-words font-medium">
                           {[property.number, property.complement]
                             .filter(Boolean)
                             .join(", ")}
@@ -854,7 +1295,7 @@ export default function Imoveis() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[100px] truncate text-center">{property.city}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center break-words">{property.city || "-"}</TableCell>
                   <TableCell className="border-r border-border/30 px-1.5 sm:px-2 text-xs text-center">
                     {property.documentation_status === "PAGO" ? (
                       <Badge className="bg-success/20 text-success hover:bg-success/30">
@@ -882,7 +1323,7 @@ export default function Imoveis() {
                       ? "INQUILINO"
                       : property.energy_ownership || "-"}
                   </TableCell>
-                  <TableCell className="font-medium text-foreground text-xs border-r border-border/30 px-1.5 sm:px-2 whitespace-nowrap text-center">
+                  <TableCell className="font-medium text-foreground text-xs border-r border-border/30 text-center">
                     {property.contract_start && property.contract_end
                       ? `${format(
                           new Date(property.contract_start),
@@ -893,8 +1334,8 @@ export default function Imoveis() {
                         )}`
                       : "-"}
                   </TableCell>
-                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[100px] truncate text-center">{property.municipal_registration || "-"}</TableCell>
-                  <TableCell className="text-center font-bold text-success border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap">
+                  <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center">{property.municipal_registration || "-"}</TableCell>
+                  <TableCell className="text-center font-bold text-success border-r border-border/30 text-xs whitespace-nowrap">
                     {property.venal_value
                       ? formatCurrency(property.venal_value)
                       : "-"}
@@ -1102,8 +1543,8 @@ export default function Imoveis() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="documentation_status" className="text-sm font-medium">
-                    Status Documentação
-                  </Label>
+                  Status Documentação
+                </Label>
                 <Select
                   value={formData.documentation_status}
                   onValueChange={(value) =>
@@ -1120,7 +1561,7 @@ export default function Imoveis() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="is_rental" className="text-sm font-medium">Imóvel de Locação</Label>
+                <Label htmlFor="is_rental" className="text-sm font-medium">Locar?</Label>
                 <Select
                   value={formData.is_rental ? "SIM" : "NÃO"}
                   onValueChange={(value) =>
@@ -1136,13 +1577,33 @@ export default function Imoveis() {
                   </SelectContent>
                 </Select>
               </div>
+              {formData.is_rental && (
+                <div className="space-y-2">
+                  <Label htmlFor="monthly_rent" className="text-sm font-medium">Valor da Locação (R$)</Label>
+                  <Input
+                    id="monthly_rent"
+                    tabIndex={8}
+                    value={formatCurrencyInput(formData.monthly_rent)}
+                    onChange={(e) => {
+                      const formatted = formatCurrencyOnInput(e.target.value);
+                      setFormData({ ...formData, monthly_rent: formatted });
+                    }}
+                    placeholder="0,00"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="water_ownership" className="text-sm font-medium">Titularidade Água</Label>
                 <Select
                   value={formData.water_ownership}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, water_ownership: value })
-                  }
+                  onValueChange={(value) => {
+                    // Se selecionar INQUILINO (TERCEIROS), marca automaticamente como locação
+                    const newData = { ...formData, water_ownership: value };
+                    if (value === "TERCEIROS") {
+                      newData.is_rental = true;
+                    }
+                    setFormData(newData);
+                  }}
                 >
                   <SelectTrigger tabIndex={8}>
                     <SelectValue placeholder="Selecione" />
@@ -1157,11 +1618,16 @@ export default function Imoveis() {
                 <Label htmlFor="energy_ownership" className="text-sm font-medium">Titularidade Energia</Label>
                 <Select
                   value={formData.energy_ownership}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, energy_ownership: value })
-                  }
+                  onValueChange={(value) => {
+                    // Se selecionar INQUILINO (TERCEIROS), marca automaticamente como locação
+                    const newData = { ...formData, energy_ownership: value };
+                    if (value === "TERCEIROS") {
+                      newData.is_rental = true;
+                    }
+                    setFormData(newData);
+                  }}
                 >
-                  <SelectTrigger tabIndex={9}>
+                  <SelectTrigger tabIndex={formData.is_rental ? 10 : 9}>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -1198,8 +1664,8 @@ export default function Imoveis() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="contract_start" className="text-sm font-medium">
-                    Início Contrato (Vigência)
-                  </Label>
+                  Início Contrato (Vigência)
+                </Label>
                 <Input
                   id="contract_start"
                   tabIndex={11}
@@ -1269,8 +1735,8 @@ export default function Imoveis() {
                     />
                   )}
                 </div>
+                </div>
               </div>
-            </div>
             </div>
 
             {/* Seção: Valores e Documentação */}
@@ -1282,8 +1748,8 @@ export default function Imoveis() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="municipal_registration" className="text-sm font-medium">
-                    Inscrição Municipal
-                  </Label>
+                  Inscrição Municipal
+                </Label>
                 <Input
                   id="municipal_registration"
                   tabIndex={15}
@@ -1340,7 +1806,7 @@ export default function Imoveis() {
                   placeholder="0,00"
                 />
               </div>
-            </div>
+              </div>
             </div>
 
             {/* Seção: Gerar Despesa (condicional) */}
@@ -1511,12 +1977,22 @@ export default function Imoveis() {
               {selectedStat === "paid" && "Detalhes - Documentação Paga"}
               {selectedStat === "pending" && "Detalhes - Documentação Pendente"}
               {selectedStat === "value" && "Detalhes - Valor Total Venal"}
+              {selectedStat === "occupancy" && "Detalhes - Taxa de Ocupação"}
+              {selectedStat === "rented" && "Detalhes - Imóveis Locados"}
+              {selectedStat === "forRental" && "Detalhes - Imóveis para Locação"}
+              {selectedStat === "available" && "Detalhes - Imóveis Disponíveis"}
+              {selectedStat === "revenue" && "Detalhes - Renda Mensal"}
             </DialogTitle>
             <DialogDescription>
               {selectedStat === "total" && `Lista completa de todos os ${stats.total} imóveis cadastrados no sistema.`}
               {selectedStat === "paid" && `Lista dos ${stats.paid} imóveis com documentação paga.`}
               {selectedStat === "pending" && `Lista dos ${stats.pending} imóveis com documentação pendente.`}
               {selectedStat === "value" && `Detalhamento do valor total venal de R$ ${formatCurrency(stats.totalValue)}.`}
+              {selectedStat === "occupancy" && `Lista dos imóveis locados (${tipoFilter === "locacao" ? rentalStats.rented : generalStats.rented} de ${tipoFilter === "locacao" ? rentalStats.total : generalStats.total} imóveis).`}
+              {selectedStat === "rented" && `Lista dos ${tipoFilter === "locacao" ? rentalStats.rented : generalStats.rented} imóveis locados.`}
+              {selectedStat === "forRental" && `Lista dos ${generalStats.forRental} imóveis para locação.`}
+              {selectedStat === "available" && `Lista dos ${tipoFilter === "locacao" ? rentalStats.available : generalStats.available} imóveis disponíveis.`}
+              {selectedStat === "revenue" && `Detalhamento da renda mensal total de ${formatCurrency(tipoFilter === "locacao" ? rentalStats.monthlyRevenue : generalStats.monthlyRevenue)}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1652,6 +2128,111 @@ export default function Imoveis() {
                               <Badge className="bg-destructive/20 text-destructive">PENDENTE</Badge>
                             )}
                           </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+            {selectedStat === "occupancy" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground mb-2">Total de Imóveis</p>
+                      <p className="text-2xl font-bold">{tipoFilter === "locacao" ? rentalStats.total : generalStats.total}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground mb-2">Imóveis Locados</p>
+                      <p className="text-2xl font-bold text-success">{tipoFilter === "locacao" ? rentalStats.rented : generalStats.rented}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground mb-2">Taxa de Ocupação</p>
+                      <p className="text-2xl font-bold text-primary">{(tipoFilter === "locacao" ? rentalStats.occupancyRate : generalStats.occupancyRate).toFixed(1)}%</p>
+                    </CardContent>
+                  </Card>
+                </div>
+                <div className="max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Endereço</TableHead>
+                        <TableHead>Cidade</TableHead>
+                        <TableHead>Valor Locação</TableHead>
+                        <TableHead>Início Contrato</TableHead>
+                        <TableHead>Fim Contrato</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(tipoFilter === "locacao" 
+                        ? filteredProperties.filter((p: any) => {
+                            const hasContract = p.contract_start || p.contract_end;
+                            const hasTenant = propertiesWithTenants.has(p.id);
+                            const hasInquilino = p.water_ownership === "TERCEIROS" || p.energy_ownership === "TERCEIROS";
+                            return p.is_rental === true || hasContract || hasTenant || hasInquilino;
+                          })
+                        : properties?.filter((p: any) => {
+                            const hasContract = p.contract_start || p.contract_end;
+                            const hasTenant = propertiesWithTenants.has(p.id);
+                            const hasInquilino = p.water_ownership === "TERCEIROS" || p.energy_ownership === "TERCEIROS";
+                            return p.is_rental === true || hasContract || hasTenant || hasInquilino;
+                          })
+                      ).map((property: any) => (
+                        <TableRow key={property.id}>
+                          <TableCell className="font-medium">{property.address || "-"}</TableCell>
+                          <TableCell>{property.city || "-"}</TableCell>
+                          <TableCell>{property.monthly_rent ? formatCurrency(property.monthly_rent) : "-"}</TableCell>
+                          <TableCell>{property.contract_start ? format(new Date(property.contract_start), "dd/MM/yyyy", { locale: ptBR }) : "-"}</TableCell>
+                          <TableCell>{property.contract_end ? format(new Date(property.contract_end), "dd/MM/yyyy", { locale: ptBR }) : "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+            {selectedStat === "rented" && (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Imóveis locados: <strong className="text-foreground">{tipoFilter === "locacao" ? rentalStats.rented : generalStats.rented}</strong>
+                </p>
+                <div className="max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Endereço</TableHead>
+                        <TableHead>Cidade</TableHead>
+                        <TableHead>Valor Locação</TableHead>
+                        <TableHead>Início Contrato</TableHead>
+                        <TableHead>Fim Contrato</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(tipoFilter === "locacao" 
+                        ? filteredProperties.filter((p: any) => {
+                            const today = new Date();
+                            const hasActiveContract = p.contract_end && new Date(p.contract_end) >= today;
+                            const hasTenant = propertiesWithTenants.has(p.id);
+                            return hasActiveContract || hasTenant;
+                          })
+                        : properties?.filter((p: any) => {
+                            const today = new Date();
+                            const hasActiveContract = p.contract_end && new Date(p.contract_end) >= today;
+                            const hasTenant = propertiesWithTenants.has(p.id);
+                            return hasActiveContract || hasTenant;
+                          })
+                      ).map((property: any) => (
+                        <TableRow key={property.id}>
+                          <TableCell className="font-medium">{property.address || "-"}</TableCell>
+                          <TableCell>{property.city || "-"}</TableCell>
+                          <TableCell>{property.monthly_rent ? formatCurrency(property.monthly_rent) : "-"}</TableCell>
+                          <TableCell>{property.contract_start ? format(new Date(property.contract_start), "dd/MM/yyyy", { locale: ptBR }) : "-"}</TableCell>
+                          <TableCell>{property.contract_end ? format(new Date(property.contract_end), "dd/MM/yyyy", { locale: ptBR }) : "-"}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

@@ -62,20 +62,24 @@ export default function RevenueOptimization() {
     notes: "",
   });
 
-  const { data: ideas = [] } = useQuery({
+  const { data: ideas = [], error: ideasError } = useQuery({
     queryKey: ["revenue_optimization_ideas"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("revenue_optimization_ideas")
         .select("*")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao buscar ideias:", error);
+        throw error;
+      }
       return data || [];
     },
     staleTime: 30000, // Cache por 30 segundos
+    retry: 1,
   });
 
-  const { data: plans = [] } = useQuery({
+  const { data: plans = [], error: plansError } = useQuery({
     queryKey: ["business_growth_plans"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -83,10 +87,14 @@ export default function RevenueOptimization() {
         .select("*")
         .eq("type", "revenue_optimization")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao buscar planejamentos:", error);
+        throw error;
+      }
       return data || [];
     },
     staleTime: 30000, // Cache por 30 segundos
+    retry: 1,
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredIdeas } = useSmartSearch(
@@ -239,6 +247,22 @@ export default function RevenueOptimization() {
 
   const handleSubmitPlan = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validar e parsear milestones com tratamento de erro
+    let parsedMilestones = null;
+    if (planFormData.milestones && planFormData.milestones.trim()) {
+      try {
+        parsedMilestones = JSON.parse(planFormData.milestones);
+      } catch (error) {
+        toast({
+          title: "Erro no formato JSON",
+          description: "O campo 'Marcos/Metas' contém JSON inválido. Por favor, corrija o formato.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     const data = {
       title: standardizeText(planFormData.title),
       description: planFormData.description ? standardizeText(planFormData.description) : null,
@@ -248,9 +272,9 @@ export default function RevenueOptimization() {
       start_date: planFormData.start_date || null,
       end_date: planFormData.end_date || null,
       status: planFormData.status,
-      progress_percentage: planFormData.progress_percentage,
+      progress_percentage: planFormData.progress_percentage || 0,
       responsible_person: planFormData.responsible_person ? standardizeText(planFormData.responsible_person) : null,
-      milestones: planFormData.milestones ? JSON.parse(planFormData.milestones) : null,
+      milestones: parsedMilestones,
       resources_needed: planFormData.resources_needed ? standardizeText(planFormData.resources_needed) : null,
       risks: planFormData.risks ? standardizeText(planFormData.risks) : null,
       success_metrics: planFormData.success_metrics ? standardizeText(planFormData.success_metrics) : null,
@@ -284,6 +308,25 @@ export default function RevenueOptimization() {
 
   const handleEditPlan = (plan: any) => {
     setEditingPlanId(plan.id);
+    
+    // Parsear milestones com segurança
+    let milestonesString = "";
+    if (plan.milestones) {
+      try {
+        if (typeof plan.milestones === 'string') {
+          // Se já é string, tentar parsear e formatar
+          const parsed = JSON.parse(plan.milestones);
+          milestonesString = JSON.stringify(parsed, null, 2);
+        } else {
+          // Se é objeto, apenas stringify
+          milestonesString = JSON.stringify(plan.milestones, null, 2);
+        }
+      } catch (error) {
+        // Se houver erro, deixar vazio
+        milestonesString = "";
+      }
+    }
+    
     setPlanFormData({
       title: plan.title || "",
       description: plan.description || "",
@@ -294,7 +337,7 @@ export default function RevenueOptimization() {
       status: plan.status || "planejamento",
       progress_percentage: plan.progress_percentage || 0,
       responsible_person: plan.responsible_person || "",
-      milestones: plan.milestones ? JSON.stringify(plan.milestones, null, 2) : "",
+      milestones: milestonesString,
       resources_needed: plan.resources_needed || "",
       risks: plan.risks || "",
       success_metrics: plan.success_metrics || "",
@@ -523,12 +566,12 @@ export default function RevenueOptimization() {
                   ) : (
                     sortedIdeas?.map((idea: any) => (
                       <TableRow key={idea.id}>
-                        <TableCell className="font-medium">{idea.title}</TableCell>
-                        <TableCell>{idea.category || "-"}</TableCell>
-                        <TableCell className="font-semibold text-success">
+                        <TableCell className="font-medium break-words">{idea.title || "-"}</TableCell>
+                        <TableCell className="break-words">{idea.category || "-"}</TableCell>
+                        <TableCell className="font-semibold text-success whitespace-nowrap">
                           {idea.estimated_revenue ? formatCurrency(idea.estimated_revenue) : "-"}
                         </TableCell>
-                        <TableCell className="capitalize">{idea.implementation_effort || "-"}</TableCell>
+                        <TableCell className="capitalize break-words">{idea.implementation_effort || "-"}</TableCell>
                         <TableCell>
                           <Badge className={getPriorityColor(idea.priority)}>
                             {idea.priority || "média"}
@@ -540,11 +583,12 @@ export default function RevenueOptimization() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => handleEditIdea(idea)}
+                              className="h-8 w-8"
                             >
                               <Pencil className="w-4 h-4" />
                             </Button>
@@ -552,17 +596,21 @@ export default function RevenueOptimization() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDelete("idea", idea.id)}
+                              className="h-8 w-8"
                             >
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleNewPlan(idea.id)}
-                              className="gap-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNewPlan(idea.id);
+                              }}
+                              className="gap-1 text-xs"
                             >
                               <Target className="w-3 h-3" />
-                              Plano
+                              <span className="hidden sm:inline">Plano</span>
                             </Button>
                           </div>
                         </TableCell>
@@ -610,19 +658,19 @@ export default function RevenueOptimization() {
                   ) : (
                     sortedPlans?.map((plan: any) => (
                       <TableRow key={plan.id}>
-                        <TableCell className="font-medium">{plan.title}</TableCell>
-                        <TableCell className="font-semibold text-success">
+                        <TableCell className="font-medium break-words">{plan.title || "-"}</TableCell>
+                        <TableCell className="font-semibold text-success whitespace-nowrap">
                           {plan.target_value ? formatCurrency(plan.target_value) : "-"}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-[120px]">
                             <div className="flex-1 bg-muted rounded-full h-2">
                               <div
-                                className="bg-primary h-2 rounded-full"
+                                className="bg-primary h-2 rounded-full transition-all"
                                 style={{ width: `${plan.progress_percentage || 0}%` }}
                               />
                             </div>
-                            <span className="text-sm font-medium">{plan.progress_percentage || 0}%</span>
+                            <span className="text-sm font-medium whitespace-nowrap">{plan.progress_percentage || 0}%</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -630,13 +678,14 @@ export default function RevenueOptimization() {
                             {plan.status || "planejamento"}
                           </Badge>
                         </TableCell>
-                        <TableCell>{plan.responsible_person || "-"}</TableCell>
+                        <TableCell className="break-words">{plan.responsible_person || "-"}</TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => handleEditPlan(plan)}
+                              className="h-8 w-8"
                             >
                               <Pencil className="w-4 h-4" />
                             </Button>
@@ -644,6 +693,7 @@ export default function RevenueOptimization() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDelete("plan", plan.id)}
+                              className="h-8 w-8"
                             >
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
@@ -812,8 +862,12 @@ export default function RevenueOptimization() {
       </Dialog>
 
       {/* Dialog para Planejamentos */}
-      <Dialog open={isPlanDialogOpen} onOpenChange={(open) => !open && handleClosePlanDialog()}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={isPlanDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleClosePlanDialog();
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           <DialogHeader>
             <DialogTitle>{editingPlanId ? "Editar Planejamento" : "Novo Planejamento"}</DialogTitle>
             <DialogDescription>
@@ -834,14 +888,14 @@ export default function RevenueOptimization() {
               <div className="space-y-2">
                 <Label htmlFor="related_idea_id">Ideia Relacionada (Opcional)</Label>
                 <Select
-                  value={planFormData.related_idea_id}
-                  onValueChange={(value) => setPlanFormData({ ...planFormData, related_idea_id: value })}
+                  value={planFormData.related_idea_id || "none"}
+                  onValueChange={(value) => setPlanFormData({ ...planFormData, related_idea_id: value === "none" ? "" : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma ideia" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma</SelectItem>
+                    <SelectItem value="none">Nenhuma</SelectItem>
                     {ideas.map((idea: any) => (
                       <SelectItem key={idea.id} value={idea.id}>
                         {idea.title}

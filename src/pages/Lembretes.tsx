@@ -114,7 +114,7 @@ export default function Lembretes() {
   };
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <PageHeader
         title="Lembretes"
         description="Não esqueça de suas tarefas importantes"

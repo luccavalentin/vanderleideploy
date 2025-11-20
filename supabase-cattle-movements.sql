@@ -80,3 +80,4 @@ COMMENT ON COLUMN cattle_movements.generate_expense IS 'Se true, gera despesa au
 
 
 
+

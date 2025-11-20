@@ -707,6 +707,11 @@ export default function Dashboard() {
         return sum + periodTotal;
       }, 0);
     },
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   // Função para gerar parcelas de despesas e calcular apenas as que já passaram
@@ -802,6 +807,11 @@ export default function Dashboard() {
       return await calculateExpenseForPeriod(startDate, endDate);
     },
     enabled: comparisonMode,
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   // Queries para período de comparação 2
@@ -981,6 +991,11 @@ export default function Dashboard() {
       });
     },
     enabled: comparisonMode,
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   const { data: comparisonExpenseDetails2 } = useQuery({
@@ -1115,6 +1130,11 @@ export default function Dashboard() {
       })).sort((a, b) => b.amount - a.amount);
     },
     enabled: comparisonMode,
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   const { data: comparisonRevenueByCategory2 } = useQuery({
@@ -1278,6 +1298,11 @@ export default function Dashboard() {
       })).sort((a, b) => b.amount - a.amount);
     },
     enabled: comparisonMode,
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   const { data: comparisonExpensesByCategory2 } = useQuery({
@@ -1359,6 +1384,11 @@ export default function Dashboard() {
       })).sort((a, b) => b.amount - a.amount);
     },
     enabled: comparisonMode,
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   const { data: expensesData } = useQuery({
@@ -1441,6 +1471,11 @@ export default function Dashboard() {
         return sum + periodTotal;
       }, 0);
     },
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   // Projeção de Receita (baseada na média dos últimos 3 meses)
@@ -1482,6 +1517,11 @@ export default function Dashboard() {
       const average = monthlyArray.reduce((sum, item) => sum + item.total, 0) / monthlyArray.length;
       return average;
     },
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   // Projeção de Despesa (baseada na média dos últimos 3 meses)
@@ -1523,6 +1563,11 @@ export default function Dashboard() {
       const average = monthlyArray.reduce((sum, item) => sum + item.total, 0) / monthlyArray.length;
       return average;
     },
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   // Receitas por categoria - REFEITO COMPLETAMENTE
@@ -1655,6 +1700,11 @@ export default function Dashboard() {
     },
     retry: 2,
     retryDelay: 1000,
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   // Despesas por categoria - REFEITO COMPLETAMENTE (mesma lógica de receitas)
@@ -1787,6 +1837,11 @@ export default function Dashboard() {
     },
     retry: 2,
     retryDelay: 1000,
+    staleTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000,
   });
 
   // Dados para análise mensal detalhada (Receitas e Despesas por mês)

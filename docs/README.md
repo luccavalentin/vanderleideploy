@@ -69,3 +69,4 @@ O sistema utiliza **Supabase** como banco de dados.
 
 
 
+

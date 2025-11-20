@@ -1,21 +1,42 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 /**
- * Hook inteligente de busca que filtra dados em múltiplas colunas
+ * Hook inteligente de busca que filtra dados em múltiplas colunas com debounce
  * @param data - Array de dados para filtrar
  * @param searchableFields - Array de chaves dos campos que devem ser pesquisáveis
+ * @param debounceMs - Tempo de debounce em milissegundos (padrão: 300ms)
  * @returns Objeto com searchTerm, setSearchTerm e filteredData
  */
 export function useSmartSearch<T extends Record<string, any>>(
   data: T[] | undefined,
-  searchableFields: (keyof T)[]
+  searchableFields: (keyof T)[],
+  debounceMs: number = 300
 ) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce do termo de busca
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, debounceMs);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchTerm, debounceMs]);
 
   const filteredData = useMemo(() => {
-    if (!data || !searchTerm.trim()) return data;
+    if (!data || !debouncedSearchTerm.trim()) return data;
 
-    const normalizedSearch = searchTerm
+    const normalizedSearch = debouncedSearchTerm
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -37,7 +58,7 @@ export function useSmartSearch<T extends Record<string, any>>(
         return normalizedValue.includes(normalizedSearch);
       });
     });
-  }, [data, searchTerm, searchableFields]);
+  }, [data, debouncedSearchTerm, searchableFields]);
 
   return {
     searchTerm,

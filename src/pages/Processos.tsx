@@ -19,13 +19,13 @@ import { useSmartSearch } from "@/hooks/useSmartSearch";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
 import { ClientSearchInput } from "@/components/ClientSearchInput";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2, Scale, Download, FileText, TrendingUp, Calendar, CheckCircle2, XCircle, DollarSign, Plus, TrendingDown } from "lucide-react";
+import { Pencil, Trash2, Scale, Download, FileText, TrendingUp, Calendar, CheckCircle2, XCircle, DollarSign, Plus, TrendingDown, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { standardizeText, handleStandardizeInput, formatCurrencyInput, parseCurrency } from "@/lib/validations";
+import { standardizeText, handleStandardizeInput, formatCurrencyInput, parseCurrency, capitalizeFirstLetter, normalizeConstraintValue } from "@/lib/validations";
 import * as XLSX from "xlsx";
 
 type ParcelConfig = {
@@ -48,8 +48,7 @@ export default function Processos() {
   const [processToDelete, setProcessToDelete] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sentenceFilter, setSentenceFilter] = useState<string>("all");
-  const [revenueDialogOpen, setRevenueDialogOpen] = useState(false);
-  const [selectedProcess, setSelectedProcess] = useState<any>(null);
+  const [createRevenueWithProcess, setCreateRevenueWithProcess] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const { toast } = useToast();
@@ -57,6 +56,7 @@ export default function Processos() {
 
   const [formData, setFormData] = useState({
     client_id: "",
+    contract: "",
     process_number: "",
     description: "",
     status: "active",
@@ -66,7 +66,27 @@ export default function Processos() {
     parcelar: false,
     qtdParcelas: "",
     recorrente: false,
+    create_revenue: false,
+    revenue_amount: "",
+    revenue_date: "",
+    revenue_frequency: "",
+    revenue_installments: "",
   });
+
+  // Estado para tarefas vinculadas ao processo
+  const [processTasks, setProcessTasks] = useState<any[]>([]);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [taskFormData, setTaskFormData] = useState({
+    title: "",
+    description: "",
+    due_date: "",
+    status: "pendente" as "pendente" | "em_andamento" | "concluida",
+    priority: "media" as "baixa" | "media" | "alta",
+    category: "",
+  });
+  const [isImporting, setIsImporting] = useState(false);
 
   const [revenueFormData, setRevenueFormData] = useState({
     description: "",
@@ -90,12 +110,16 @@ export default function Processos() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("legal_processes")
-        .select("*, clients(name)")
+        .select("*, clients(name), reminders(id, title, status, due_date)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredProcesses, resultCount, totalCount } = useSmartSearch(
@@ -125,10 +149,18 @@ export default function Processos() {
   const { data: clients } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("id, name").order("name");
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, cpf_cnpj, email")
+        .order("name");
       if (error) throw error;
       return data;
     },
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   const quickClientMutation = useMutation({
@@ -282,7 +314,7 @@ export default function Processos() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.description || !formData.description.trim()) {
@@ -316,9 +348,10 @@ export default function Processos() {
 
     const data: any = {
       client_id: formData.client_id || null,
-      process_number: formData.process_number ? standardizeText(formData.process_number) : null,
+      contract: formData.contract ? standardizeText(formData.contract.trim()) : null,
+      process_number: formData.process_number ? standardizeText(formData.process_number.trim()) : null,
       description: standardizeText(formData.description),
-      status: formData.status || "active",
+      status: normalizeConstraintValue("process_status", formData.status) || "active",
       has_sentence: formData.has_sentence || false,
       estimated_value: formData.estimated_value ? parseCurrency(formData.estimated_value) : null,
       payment_forecast: formData.payment_forecast || null,
@@ -353,10 +386,100 @@ export default function Processos() {
       };
     }
 
+    let processId: string;
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data });
+      await updateMutation.mutateAsync({ id: editingId, data });
+      processId = editingId;
     } else {
-      createMutation.mutate({ processData: data, parcelConfig });
+      const result = await createMutation.mutateAsync({ processData: data, parcelConfig });
+      processId = result?.id || editingId || "";
+    }
+
+    // Salvar tarefas vinculadas ao processo
+    if (processId && processTasks.length > 0) {
+      // Buscar tarefas existentes vinculadas a este processo
+      const { data: existingTasks } = await (supabase as any)
+        .from("reminders")
+        .select("id")
+        .eq("legal_process_id", processId);
+
+      const existingTaskIds = existingTasks?.map((t: any) => t.id) || [];
+      const currentTaskIds = processTasks.map((t: any) => t.id).filter((id: string) => id && !id.startsWith("temp-"));
+
+      // Remover tarefas que foram deletadas
+      const tasksToDelete = existingTaskIds.filter((id: string) => !currentTaskIds.includes(id));
+      if (tasksToDelete.length > 0) {
+        await (supabase as any)
+          .from("reminders")
+          .delete()
+          .in("id", tasksToDelete);
+      }
+
+      // Salvar/atualizar tarefas
+      for (const task of processTasks) {
+        const taskData: any = {
+          title: standardizeText(task.title.trim()),
+          description: task.description ? task.description.trim() : null,
+          due_date: task.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 dias padrão se não informado
+          status: normalizeConstraintValue("reminder_status", task.status) || "pendente",
+          priority: normalizeConstraintValue("priority", task.priority) || "media",
+          category: task.category ? standardizeText(task.category.trim()) : null,
+          legal_process_id: processId,
+          completed: task.status === "concluida",
+        };
+
+        if (task.id && !task.id.startsWith("temp-")) {
+          // Atualizar tarefa existente
+          await (supabase as any)
+            .from("reminders")
+            .update(taskData)
+            .eq("id", task.id);
+        } else {
+          // Criar nova tarefa
+          await (supabase as any)
+            .from("reminders")
+            .insert([taskData]);
+        }
+      }
+
+      // Invalidar queries para atualizar a lista
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+    }
+
+    // Cadastrar receita relacionada se solicitado
+    if (formData.create_revenue && formData.revenue_amount && formData.revenue_date) {
+      try {
+        const revenueData: any = {
+          description: standardizeText(`${formData.description || "Receita do Processo"}${formData.process_number ? ` - ${formData.process_number}` : ""}`),
+          amount: parseCurrency(formData.revenue_amount),
+          date: formData.revenue_date,
+          category: "Processo Judicial",
+          frequency: formData.revenue_frequency || "",
+          installments: formData.revenue_frequency && formData.revenue_frequency.includes("Tempo Determinado") && formData.revenue_installments
+            ? parseInt(formData.revenue_installments)
+            : null,
+          documentation_status: "PENDENTE",
+          linked_source: formData.process_number || formData.description || null,
+        };
+
+        const { error: revenueError } = await supabase
+          .from("revenue")
+          .insert([revenueData]);
+
+        if (revenueError) throw revenueError;
+
+        queryClient.invalidateQueries({ queryKey: ["revenues"] });
+        toast({
+          title: "Receita cadastrada com sucesso!",
+          description: "A receita relacionada ao processo foi criada.",
+        });
+      } catch (error: any) {
+        toast({
+          title: "Erro ao cadastrar receita",
+          description: error.message || "Não foi possível criar a receita relacionada.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -364,6 +487,7 @@ export default function Processos() {
     setEditingId(process.id);
     setFormData({
       client_id: process.client_id || "",
+      contract: process.contract || "",
       process_number: process.process_number || "",
       description: process.description || "",
       status: process.status || "active",
@@ -373,6 +497,11 @@ export default function Processos() {
       parcelar: false,
       qtdParcelas: "",
       recorrente: false,
+      create_revenue: false,
+      revenue_amount: "",
+      revenue_date: "",
+      revenue_frequency: "",
+      revenue_installments: "",
     });
     setIsDialogOpen(true);
   };
@@ -391,8 +520,10 @@ export default function Processos() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingId(null);
+    setProcessTasks([]);
     setFormData({
       client_id: "",
+      contract: "",
       process_number: "",
       description: "",
       status: "active",
@@ -402,13 +533,20 @@ export default function Processos() {
       parcelar: false,
       qtdParcelas: "",
       recorrente: false,
+      create_revenue: false,
+      revenue_amount: "",
+      revenue_date: "",
+      revenue_frequency: "",
+      revenue_installments: "",
     });
   };
 
   const handleNewItem = () => {
     setEditingId(null);
+    setProcessTasks([]);
     setFormData({
       client_id: "",
+      contract: "",
       process_number: "",
       description: "",
       status: "active",
@@ -420,6 +558,197 @@ export default function Processos() {
       recorrente: false,
     });
     setIsDialogOpen(true);
+  };
+
+  // Funções para gerenciar tarefas vinculadas ao processo
+  const handleNewTask = () => {
+    setEditingTaskId(null);
+    setTaskFormData({
+      title: "",
+      description: "",
+      due_date: "",
+      status: "pendente",
+      priority: "media",
+      category: "",
+    });
+    setTaskDialogOpen(true);
+  };
+
+  const handleEditTask = (task: any) => {
+    setEditingTaskId(task.id);
+    setTaskFormData({
+      title: task.title || "",
+      description: task.description || "",
+      due_date: task.due_date || "",
+      status: task.status || "pendente",
+      priority: task.priority || "media",
+      category: task.category || "",
+    });
+    setTaskDialogOpen(true);
+  };
+
+  const handleSaveTask = () => {
+    if (!taskFormData.title.trim()) {
+      toast({
+        title: "Erro",
+        description: "O título da tarefa é obrigatório.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Aplicar capitalização no título e categoria
+    const capitalizedTaskData = {
+      ...taskFormData,
+      title: standardizeText(taskFormData.title.trim()),
+      category: taskFormData.category ? standardizeText(taskFormData.category.trim()) : "",
+    };
+
+    if (editingTaskId) {
+      // Atualizar tarefa existente
+      setProcessTasks(processTasks.map(task => 
+        task.id === editingTaskId 
+          ? { ...task, ...capitalizedTaskData }
+          : task
+      ));
+    } else {
+      // Adicionar nova tarefa
+      setProcessTasks([...processTasks, { ...capitalizedTaskData, id: `temp-${Date.now()}` }]);
+    }
+
+    setTaskDialogOpen(false);
+    setEditingTaskId(null);
+    setTaskFormData({
+      title: "",
+      description: "",
+      due_date: "",
+      status: "pendente",
+      priority: "media",
+      category: "",
+    });
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    setProcessTasks(processTasks.filter(task => task.id !== taskId));
+    setTaskToDelete(null);
+  };
+
+  const handleCloseTaskDialog = () => {
+    setTaskDialogOpen(false);
+    setEditingTaskId(null);
+    setTaskFormData({
+      title: "",
+      description: "",
+      due_date: "",
+      status: "pendente",
+      priority: "media",
+      category: "",
+    });
+  };
+
+  // Função para importar processos em massa
+  const handleImportProcesses = async () => {
+    setIsImporting(true);
+    try {
+      const processesData = [
+        { contract: 'DIVERSOS E MENSALIDADES', has_sentence: false, estimated_value: null, payment_forecast: null },
+        { contract: 'AQUALAX - MAFRE', has_sentence: true, estimated_value: 4000.00, payment_forecast: '2025-12-01' },
+        { contract: 'EDERSON', has_sentence: true, estimated_value: 18354.00, payment_forecast: '2025-12-01' },
+        { contract: 'MULHER DO GENERAL', has_sentence: true, estimated_value: 3000.00, payment_forecast: '2025-12-01' },
+        { contract: 'DAMIANA', has_sentence: false, estimated_value: null, payment_forecast: null },
+        { contract: 'CAKE', has_sentence: false, estimated_value: null, payment_forecast: null },
+        { contract: 'MASTER', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'OTM', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'SUCUMB. RODOTEC', has_sentence: true, estimated_value: 7800.00, payment_forecast: '2025-12-01' },
+        { contract: 'LUZIA', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'RENATA ZACHARIAS', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'ARI INDIC. ANTONIO', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'ALEXANDRE WENZEL', has_sentence: false, estimated_value: null, payment_forecast: null },
+        { contract: 'JUNINHO JAGUARIUNA', has_sentence: false, estimated_value: null, payment_forecast: null },
+        { contract: 'MIRO', has_sentence: true, estimated_value: null, payment_forecast: null },
+        { contract: 'BAÚ', has_sentence: false, estimated_value: null, payment_forecast: '2025-12-01' },
+        { contract: 'INTERCAMBIO', has_sentence: false, estimated_value: null, payment_forecast: null },
+        { contract: 'ROBERTO MANARA', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'BACOCHINA 2 ações', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'DELARIVA J T', has_sentence: false, estimated_value: 3000.00, payment_forecast: '2025-12-01' },
+        { contract: 'SCAMA', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'MARCO BUCK', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'SIMONETTI', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'EMILIANA', has_sentence: true, estimated_value: null, payment_forecast: null },
+        { contract: 'GENIL', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'ROSEILDO', has_sentence: false, estimated_value: 13500.00, payment_forecast: '2025-12-01' },
+        { contract: 'NAZARE', has_sentence: false, estimated_value: null, payment_forecast: null },
+        { contract: 'VANTAME/DIMAS', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'POUPANÇAS', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'CAPELA', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'NARCISO NICOLA', has_sentence: false, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'REINALDO FUND. CASA. RPV', has_sentence: true, estimated_value: null, payment_forecast: '2028-12-01' },
+        { contract: 'CUMP. SENTENÇA H.STEFANI', has_sentence: true, estimated_value: null, payment_forecast: '2026-07-01' },
+        { contract: 'RUTH LEUSA', has_sentence: true, estimated_value: null, payment_forecast: null },
+        { contract: 'EUNICE SICOB', has_sentence: true, estimated_value: null, payment_forecast: null },
+      ];
+
+      // Aplicar capitalização: primeira letra maiúscula, demais minúsculas
+      const formattedProcesses = processesData.map(p => ({
+        contract: capitalizeFirstLetter(p.contract),
+        process_number: null,
+        description: capitalizeFirstLetter(p.contract),
+        status: 'active',
+        has_sentence: p.has_sentence,
+        estimated_value: p.estimated_value,
+        payment_forecast: p.payment_forecast,
+      }));
+
+      // Verificar processos existentes
+      const { data: existingProcesses } = await supabase
+        .from("legal_processes")
+        .select("contract");
+
+      const existingContracts = new Set(
+        (existingProcesses || []).map((p: any) => capitalizeFirstLetter(p.contract?.trim() || '').toLowerCase())
+      );
+
+      const newProcesses = formattedProcesses.filter(
+        (p) => !existingContracts.has(p.contract.toLowerCase().trim())
+      );
+
+      let insertedProcesses: any[] = [];
+
+      if (newProcesses.length > 0) {
+        // Inserir apenas processos novos
+        const { data: inserted, error: processesError } = await supabase
+          .from("legal_processes")
+          .insert(newProcesses)
+          .select();
+
+        if (processesError) {
+          throw processesError;
+        }
+
+        insertedProcesses = inserted || [];
+      }
+
+      // Invalidar queries para atualizar a lista
+      queryClient.invalidateQueries({ queryKey: ["legal_processes"] });
+
+      const totalProcesses = (existingProcesses?.length || 0) + insertedProcesses.length;
+
+      toast({
+        title: "Importação concluída!",
+        description: insertedProcesses.length > 0 
+          ? `${insertedProcesses.length} novo(s) processo(s) cadastrado(s). Total: ${totalProcesses} processo(s).`
+          : `Nenhum processo novo para cadastrar. Total: ${totalProcesses} processo(s).`,
+      });
+    } catch (error: any) {
+      console.error("Erro ao importar processos:", error);
+      toast({
+        title: "Erro ao importar",
+        description: error.message || "Ocorreu um erro ao importar os processos.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleQuickClientSubmit = (e: React.FormEvent) => {
@@ -800,6 +1129,16 @@ export default function Processos() {
                   <SelectItem value="false">Sem Sentença</SelectItem>
                 </SelectContent>
               </Select>
+              <Button 
+                onClick={handleImportProcesses} 
+                disabled={isImporting}
+                variant="outline"
+                className="gap-2 shadow-sm hover:shadow-elegant"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">{isImporting ? "Importando..." : "Importar Dados"}</span>
+                <span className="sm:hidden">{isImporting ? "..." : "Importar"}</span>
+              </Button>
               <Button onClick={handleExportPDF} className="gap-2 shadow-elegant hover:shadow-elegant-lg">
                 <FileText className="w-4 h-4" />
                 <span className="hidden sm:inline">Exportar PDF</span>
@@ -944,16 +1283,6 @@ export default function Processos() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleOpenRevenueDialog(process)}
-                        aria-label="Cadastrar receita"
-                        title="Cadastrar receita relacionada"
-                        className="h-8 w-8 text-success hover:text-success"
-                      >
-                        <DollarSign className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
                         onClick={() => handleEdit(process)}
                         aria-label="Editar processo"
                         title="Editar processo"
@@ -988,18 +1317,19 @@ export default function Processos() {
           setIsDialogOpen(true);
         }
       }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Processo" : "Novo Processo"}</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-xl sm:text-2xl">{editingId ? "Editar Processo" : "Novo Processo"}</DialogTitle>
+            <DialogDescription className="text-sm">
               {editingId ? "Edite os dados do processo abaixo." : "Preencha os dados para cadastrar um novo processo jurídico."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="client_id">Cliente *</Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Cliente */}
+            <div className="space-y-2">
+              <Label htmlFor="client_id" className="text-sm font-semibold">Cliente *</Label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex-1">
                   <ClientSearchInput
                     value={formData.client_id}
                     onChange={(value) => setFormData({ ...formData, client_id: value })}
@@ -1012,81 +1342,70 @@ export default function Processos() {
                       </Button>
                     }
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="whitespace-nowrap"
-                    onClick={() => setIsClientDialogOpen(true)}
-                  >
-                    + Cadastrar Cliente
-                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Conecte o processo a um cliente existente ou cadastre um novo em segundos.
-                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="whitespace-nowrap"
+                  onClick={() => setIsClientDialogOpen(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Cadastrar Cliente
+                </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Conecte o processo a um cliente existente ou cadastre um novo em segundos.
+              </p>
+            </div>
+
+            {/* Campos principais: Contrato, Número do Processo, Sentença, Valor Estimado, Previsão de Pagamento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Contrato */}
               <div className="space-y-2">
-                <Label htmlFor="process_number">Número do Processo</Label>
+                <Label htmlFor="contract" className="text-sm font-semibold">Contrato</Label>
+                <Input
+                  id="contract"
+                  value={formData.contract}
+                  onChange={(e) => setFormData({ ...formData, contract: e.target.value })}
+                  onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, contract: value }))}
+                  placeholder="Número do contrato"
+                  className="w-full"
+                />
+              </div>
+
+              {/* Número do Processo */}
+              <div className="space-y-2">
+                <Label htmlFor="process_number" className="text-sm font-semibold">Número do Processo</Label>
                 <Input
                   id="process_number"
                   value={formData.process_number}
                   onChange={(e) => setFormData({ ...formData, process_number: e.target.value })}
                   onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, process_number: value }))}
                   placeholder="Ex: 0000123-45.2023.8.26.0100"
+                  className="w-full"
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição do Processo *</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, description: value }))}
-                rows={4}
-                placeholder="Descreva o processo jurídico..."
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Sentença */}
               <div className="space-y-2">
-                <Label htmlFor="status">Status do Processo</Label>
-                <Select 
-                  value={formData.status} 
-                  onValueChange={(value) => setFormData({ ...formData, status: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
-                    <SelectItem value="active">Ativo</SelectItem>
-                    <SelectItem value="pending">Pendente</SelectItem>
-                    <SelectItem value="closed">Encerrado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="has_sentence">Possui Sentença?</Label>
+                <Label htmlFor="has_sentence" className="text-sm font-semibold">Sentença</Label>
                 <Select 
                   value={formData.has_sentence ? "true" : "false"} 
                   onValueChange={(value) => setFormData({ ...formData, has_sentence: value === "true" })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
-                    <SelectItem value="true">SIM</SelectItem>
                     <SelectItem value="false">NÃO</SelectItem>
+                    <SelectItem value="true">SIM</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Valor Estimado */}
               <div className="space-y-2">
-                <Label htmlFor="estimated_value">Valor Estimado (R$)</Label>
+                <Label htmlFor="estimated_value" className="text-sm font-semibold">Valor Estimado (R$)</Label>
                 <Input
                   id="estimated_value"
                   type="text"
@@ -1096,11 +1415,205 @@ export default function Processos() {
                     setFormData({ ...formData, estimated_value: formatted });
                   }}
                   placeholder="0,00"
+                  className="w-full"
                 />
-                <div className="flex items-center gap-2 mt-2">
-                  <Label>Parcelar?</Label>
+              </div>
+
+              {/* Previsão de Pagamento */}
+              <div className="space-y-2">
+                <Label htmlFor="payment_forecast" className="text-sm font-semibold">Previsão de Pagamento</Label>
+                <Input
+                  id="payment_forecast"
+                  type="date"
+                  value={formData.payment_forecast}
+                  onChange={(e) => setFormData({ ...formData, payment_forecast: e.target.value })}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Status do Processo */}
+              <div className="space-y-2">
+                <Label htmlFor="status" className="text-sm font-semibold">Status do Processo</Label>
+                <Select 
+                  value={formData.status} 
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="active">Ativo</SelectItem>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="closed">Encerrado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Descrição do Processo */}
+            <div className="space-y-2">
+              <Label htmlFor="description" className="text-sm font-semibold">Descrição do Processo *</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, description: value }))}
+                rows={4}
+                placeholder="Descreva o processo jurídico..."
+                required
+                className="w-full resize-none"
+              />
+            </div>
+
+            {/* Tarefas Vinculadas */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Tarefas Vinculadas</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNewTask}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nova Tarefa
+                </Button>
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3">
+                {processTasks.length > 0 ? (
+                  processTasks.map((task: any) => (
+                    <div key={task.id} className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/50">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{task.title}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {task.status === "pendente" ? "Pendente" : task.status === "em_andamento" ? "Em Andamento" : "Concluída"}
+                          </Badge>
+                        </div>
+                        {task.due_date && (
+                          <span className="text-xs text-muted-foreground">
+                            Vencimento: {format(new Date(task.due_date), "dd/MM/yyyy")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditTask(task)}
+                          className="h-8 w-8"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setTaskToDelete(task.id)}
+                          className="h-8 w-8 text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhuma tarefa vinculada. Clique em "Nova Tarefa" para adicionar.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Cadastrar Receita Relacionada */}
+            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+              <div className="flex items-center gap-3">
+                <Label className="text-sm font-semibold">Cadastrar Receita Relacionada?</Label>
+                <Select 
+                  value={formData.create_revenue ? "sim" : "nao"} 
+                  onValueChange={(value) => setFormData({ ...formData, create_revenue: value === "sim" })}
+                >
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nao">Não</SelectItem>
+                    <SelectItem value="sim">Sim</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {formData.create_revenue && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="revenue_amount" className="text-sm">Valor da Receita (R$) *</Label>
+                    <Input
+                      id="revenue_amount"
+                      type="text"
+                      value={formData.revenue_amount}
+                      onChange={(e) => {
+                        const formatted = formatCurrencyInput(e.target.value);
+                        setFormData({ ...formData, revenue_amount: formatted });
+                      }}
+                      placeholder="0,00"
+                      className="w-full"
+                      required={formData.create_revenue}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="revenue_date" className="text-sm">Data da Receita *</Label>
+                    <Input
+                      id="revenue_date"
+                      type="date"
+                      value={formData.revenue_date}
+                      onChange={(e) => setFormData({ ...formData, revenue_date: e.target.value })}
+                      className="w-full"
+                      required={formData.create_revenue}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="revenue_frequency" className="text-sm">Frequência</Label>
+                    <Select 
+                      value={formData.revenue_frequency} 
+                      onValueChange={(value) => setFormData({ ...formData, revenue_frequency: value, revenue_installments: value ? formData.revenue_installments : "" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Única" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Única</SelectItem>
+                        <SelectItem value="Mensal Fixo">Mensal Fixo</SelectItem>
+                        <SelectItem value="Mensal Tempo Determinado">Mensal Tempo Determinado</SelectItem>
+                        <SelectItem value="Anual Fixo">Anual Fixo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {formData.revenue_frequency && formData.revenue_frequency.includes("Tempo Determinado") && (
+                    <div className="space-y-2">
+                      <Label htmlFor="revenue_installments" className="text-sm">Parcelas</Label>
+                      <Input
+                        id="revenue_installments"
+                        type="number"
+                        min="1"
+                        value={formData.revenue_installments}
+                        onChange={(e) => setFormData({ ...formData, revenue_installments: e.target.value })}
+                        placeholder="Ex: 12"
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Opções de Parcelamento */}
+            {formData.estimated_value && (
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3">
+                  <Label className="text-sm font-semibold">Parcelar recebimento?</Label>
                   <Select value={formData.parcelar ? "sim" : "nao"} onValueChange={(value) => setFormData({ ...formData, parcelar: value === "sim" })}>
-                    <SelectTrigger className="w-[80px]">
+                    <SelectTrigger className="w-[100px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1108,43 +1621,38 @@ export default function Processos() {
                       <SelectItem value="sim">Sim</SelectItem>
                     </SelectContent>
                   </Select>
-                  {formData.parcelar && (
-                    <Input
-                      type="number"
-                      min={1}
-                      max={60}
-                      value={formData.qtdParcelas || ""}
-                      onChange={(e) => setFormData({ ...formData, qtdParcelas: e.target.value })}
-                      placeholder="Qtd. parcelas"
-                      className="w-[120px]"
-                    />
-                  )}
                 </div>
                 {formData.parcelar && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <Label>Gerar como receita recorrente?</Label>
-                    <Select value={formData.recorrente ? "sim" : "nao"} onValueChange={(value) => setFormData({ ...formData, recorrente: value === "sim" })}>
-                      <SelectTrigger className="w-[80px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nao">Não</SelectItem>
-                        <SelectItem value="sim">Sim</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="qtdParcelas" className="text-sm">Quantidade de Parcelas</Label>
+                      <Input
+                        id="qtdParcelas"
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={formData.qtdParcelas || ""}
+                        onChange={(e) => setFormData({ ...formData, qtdParcelas: e.target.value })}
+                        placeholder="Ex: 12"
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">Gerar como receita recorrente?</Label>
+                      <Select value={formData.recorrente ? "sim" : "nao"} onValueChange={(value) => setFormData({ ...formData, recorrente: value === "sim" })}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="nao">Não</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="payment_forecast">Previsão de Pagamento</Label>
-                <Input
-                  id="payment_forecast"
-                  type="date"
-                  value={formData.payment_forecast}
-                  onChange={(e) => setFormData({ ...formData, payment_forecast: e.target.value })}
-                />
-              </div>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={handleCloseDialog}>

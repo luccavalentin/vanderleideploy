@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +23,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { standardizeText, handleStandardizeInput } from "@/lib/validations";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { ScrollIndicator } from "@/components/ui/ScrollIndicator";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -37,6 +38,7 @@ export default function Despesas() {
   const [selectedCard, setSelectedCard] = useState<"expense" | "balance" | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   
   // Ler parâmetros da URL para filtros
   const categoriaFilter = searchParams.get("categoria") || "";
@@ -65,7 +67,11 @@ export default function Despesas() {
       if (error) throw error;
       return data;
     },
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   // Buscar receitas para calcular o saldo
@@ -78,7 +84,11 @@ export default function Despesas() {
       if (error) throw error;
       return data;
     },
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredExpenses, resultCount, totalCount } = useSmartSearch(
@@ -117,17 +127,52 @@ export default function Despesas() {
     }
   }, [novoParam, categoriaFilter, linkedSourceParam, searchParams, setSearchParams]);
 
-  // Aplicar filtro adicional por categoria se especificado na URL
+  // Aplicar filtro adicional por categoria e linked_source se especificado na URL
   const finalFilteredExpenses = useMemo(() => {
     if (!filteredExpenses) return [];
-    if (!categoriaFilter) return filteredExpenses;
+    let result = filteredExpenses;
     
-    // Filtrar por categoria (case-insensitive)
-    return filteredExpenses.filter((expense: any) => {
+    // Filtrar por categoria se especificado
+    if (categoriaFilter) {
+      result = result.filter((expense: any) => {
       const category = (expense.category || "").toLowerCase();
       return category.includes(categoriaFilter.toLowerCase());
     });
-  }, [filteredExpenses, categoriaFilter]);
+    }
+    
+    // Filtrar por linked_source se especificado
+    if (linkedSourceParam) {
+      result = result.filter((expense: any) => {
+        const linkedSource = (expense.linked_source || "").toLowerCase();
+        const isLinkedSourceMatch = linkedSource.includes(linkedSourceParam.toLowerCase());
+        
+        // Se for "Imóveis", filtrar também por property_id ou categorias relacionadas
+        if (linkedSourceParam.toLowerCase() === "imóveis" || linkedSourceParam.toLowerCase() === "imoveis") {
+          const hasPropertyId = !!expense.property_id;
+          const category = (expense.category || "").toLowerCase();
+          const description = (expense.description || "").toLowerCase();
+          
+          // Categorias relacionadas a imóveis
+          const propertyRelatedCategories = [
+            "aluguel", "arrendamento", "locação", "locacao", "rent", "rental",
+            "condomínio", "condominio", "iptu", "taxa", "manutenção", "manutencao",
+            "reforma", "reparo", "seguro", "segurança", "seguranca", "limpeza",
+            "pintura", "jardinagem", "elétrica", "eletrica", "hidráulica", "hidraulica"
+          ];
+          
+          const isPropertyCategory = propertyRelatedCategories.some(cat => 
+            category.includes(cat) || description.includes(cat)
+          );
+          
+          return (isLinkedSourceMatch || hasPropertyId || isPropertyCategory);
+        }
+        
+        return isLinkedSourceMatch;
+      });
+    }
+    
+    return result;
+  }, [filteredExpenses, categoriaFilter, linkedSourceParam]);
 
   const { sortedData: sortedExpenses, SortButton } = useTableSort(finalFilteredExpenses);
 
@@ -650,20 +695,20 @@ export default function Despesas() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div className="space-y-1 flex-1">
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-destructive">
+                  <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-destructive">
                   VALOR TOTAL DE DESPESAS
                 </p>
                 <p className="text-[8px] sm:text-[9px] text-muted-foreground/70 font-medium">
                   Acumulado {financialStats.currentYear}
-                </p>
+                  </p>
                 <p className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-none text-destructive break-words">
                   {formatCurrency(financialStats.totalExpenses)}
-                </p>
+                  </p>
+                </div>
+                <div className="relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm bg-destructive/10 text-destructive flex-shrink-0 ml-2 sm:ml-4">
+                  <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
+                </div>
               </div>
-              <div className="relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm bg-destructive/10 text-destructive flex-shrink-0 ml-2 sm:ml-4">
-                <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
-              </div>
-            </div>
           </CardContent>
         </Card>
 
@@ -683,7 +728,7 @@ export default function Despesas() {
                 <p className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-none break-words ${financialStats.saldo >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {formatCurrency(financialStats.saldo)}
                 </p>
-              </div>
+                </div>
               <div className={`relative p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl shadow-sm flex-shrink-0 ml-2 sm:ml-4 ${financialStats.saldo >= 0 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
                 <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" strokeWidth={2.5} />
               </div>
@@ -700,60 +745,60 @@ export default function Despesas() {
               <h3 className="text-lg font-bold text-foreground">Origem das Despesas</h3>
               <p className="text-sm text-muted-foreground">Distribuição por categoria</p>
             </div>
-            <div className="w-full overflow-visible">
+                  <div className="w-full overflow-visible">
               <ResponsiveContainer width="100%" height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : window.innerWidth < 768 ? 350 : 400} className="min-h-[320px] sm:min-h-[350px] md:min-h-[400px]">
-                <PieChart margin={{ top: 10, right: 10, bottom: typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 80, left: 10 }}>
-                  <Pie
-                    data={expenseByCategory}
-                    cx="50%"
-                    cy={typeof window !== 'undefined' && window.innerWidth < 640 ? "40%" : "45%"}
-                    labelLine={false}
-                    label={false}
+                      <PieChart margin={{ top: 10, right: 10, bottom: typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 80, left: 10 }}>
+                        <Pie
+                          data={expenseByCategory}
+                          cx="50%"
+                          cy={typeof window !== 'undefined' && window.innerWidth < 640 ? "40%" : "45%"}
+                          labelLine={false}
+                          label={false}
                     outerRadius={typeof window !== 'undefined' && window.innerWidth < 640 ? 80 : 100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {expenseByCategory.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--popover))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '0.75rem',
-                      padding: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                      fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '11px' : '13px'
-                    }}
-                    formatter={(value: any) => formatCurrency(value)}
-                  />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 60}
-                    iconType="circle"
-                    wrapperStyle={{ 
-                      paddingTop: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '20px',
-                      fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '11px',
-                      fontWeight: '500',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
-                      width: '100%',
-                      maxWidth: '100%',
-                      overflow: 'visible',
-                      lineHeight: '1.6',
-                      wordBreak: 'break-word',
-                      whiteSpace: 'normal'
-                    }}
-                    formatter={(value) => {
-                      const maxLength = typeof window !== 'undefined' && window.innerWidth < 640 ? 20 : 30;
-                      return value.length > maxLength ? value.substring(0, maxLength) + '...' : value;
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {expenseByCategory.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--popover))', 
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '0.75rem',
+                            padding: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '11px' : '13px'
+                          }}
+                          formatter={(value: any) => formatCurrency(value)}
+                        />
+                        <Legend 
+                          verticalAlign="bottom" 
+                          height={typeof window !== 'undefined' && window.innerWidth < 640 ? 100 : 60}
+                          iconType="circle"
+                          wrapperStyle={{ 
+                            paddingTop: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '20px',
+                            fontSize: typeof window !== 'undefined' && window.innerWidth < 640 ? '10px' : '11px',
+                            fontWeight: '500',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: typeof window !== 'undefined' && window.innerWidth < 640 ? '8px' : '12px',
+                            width: '100%',
+                            maxWidth: '100%',
+                            overflow: 'visible',
+                            lineHeight: '1.6',
+                            wordBreak: 'break-word',
+                            whiteSpace: 'normal'
+                          }}
+                          formatter={(value) => {
+                            const maxLength = typeof window !== 'undefined' && window.innerWidth < 640 ? 20 : 30;
+                            return value.length > maxLength ? value.substring(0, maxLength) + '...' : value;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
@@ -765,11 +810,11 @@ export default function Despesas() {
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div className="flex-1 w-full">
-                <SmartSearchInput
-                  value={searchTerm}
-                  onChange={setSearchTerm}
-                  placeholder="Buscar por descrição, categoria, status..."
-                />
+        <SmartSearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Buscar por descrição, categoria, status..."
+        />
               </div>
               <div className="flex gap-2 flex-wrap w-full sm:w-auto">
                 <Button onClick={handleExportPDF} className="gap-2 shadow-elegant hover:shadow-elegant-lg flex-1 sm:flex-initial">
@@ -784,7 +829,7 @@ export default function Despesas() {
                 </Button>
               </div>
             </div>
-            {searchTerm && (
+        {searchTerm && (
               <div className="pt-3 border-t border-border/30">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-muted-foreground">
@@ -801,24 +846,25 @@ export default function Despesas() {
                     </Button>
                   )}
                 </div>
-              </div>
-            )}
           </div>
+        )}
+      </div>
         </CardContent>
       </Card>
 
       <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
+        <div ref={tableContainerRef} className="overflow-x-auto relative">
+          <ScrollIndicator scrollContainerRef={tableContainerRef} direction="both" />
+          <Table className="w-full border-separate border-spacing-0 min-w-[700px] sm:min-w-[900px] md:min-w-[1100px] lg:min-w-[1200px]">
           <TableHeader>
             <TableRow className="border-b-2 border-destructive/30 hover:bg-transparent">
-              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl px-1.5 sm:px-2 text-xs text-center">Data</TableHead>
-              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Descrição</TableHead>
-              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Categoria</TableHead>
-              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Fornecedor</TableHead>
-              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Status</TableHead>
-              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Valor</TableHead>
-              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs w-16 text-center">Ações</TableHead>
+              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl text-xs text-center whitespace-nowrap">Data</TableHead>
+              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Descrição</TableHead>
+              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Categoria</TableHead>
+              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Fornecedor</TableHead>
+              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Status</TableHead>
+              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Valor</TableHead>
+              <TableHead className="bg-gradient-to-r from-destructive/10 to-destructive/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs w-16 text-center whitespace-nowrap">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1152,17 +1198,17 @@ export default function Despesas() {
               <div className="space-y-3">
                 <h3 className="font-bold text-lg text-foreground">Despesas que compõem o total ({financialStats.expensesThisYear.length}):</h3>
                 <div className="max-h-[400px] overflow-y-auto border border-border/30 rounded-lg">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
+            <Table>
+              <TableHeader>
+                <TableRow>
                         <TableHead>Data</TableHead>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead>Categoria</TableHead>
-                        <TableHead>Status</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Status</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                       {financialStats.expensesThisYear.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
@@ -1171,29 +1217,29 @@ export default function Despesas() {
                         </TableRow>
                       ) : (
                         financialStats.expensesThisYear.map((expense: any) => (
-                          <TableRow key={expense.id}>
+                  <TableRow key={expense.id}>
                             <TableCell className="text-xs">
                               {expense.date ? (() => {
                                 const date = new Date(expense.date);
                                 return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
                               })() : "-"}
-                            </TableCell>
+                    </TableCell>
                             <TableCell className="font-medium text-xs max-w-[200px] truncate">{expense.description || "-"}</TableCell>
                             <TableCell className="text-xs">{expense.category || "-"}</TableCell>
                             <TableCell className="text-xs">
                               <Badge variant={expense.status === "PAGO" ? "default" : expense.status === "PENDENTE" ? "destructive" : "secondary"} className="text-[10px]">
-                                {expense.status || "PENDENTE"}
-                              </Badge>
-                            </TableCell>
+                        {expense.status || "PENDENTE"}
+                      </Badge>
+                    </TableCell>
                             <TableCell className="text-right font-bold text-destructive text-xs">
                               {formatCurrency(expense.amount || 0)}
                             </TableCell>
-                          </TableRow>
+                  </TableRow>
                         ))
                       )}
-                    </TableBody>
-                  </Table>
-                </div>
+              </TableBody>
+            </Table>
+          </div>
               </div>
             </div>
           ) : (

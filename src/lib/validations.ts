@@ -164,14 +164,6 @@ export const preserveOriginal = (text: string): string => {
   return text;
 };
 
-// Formatação de moeda (BRL)
-export const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-};
-
 // Formatação de moeda para input (sem símbolo R$)
 export const formatCurrencyInput = (value: string | number): string => {
   if (!value) return "";
@@ -220,6 +212,17 @@ export const parseCurrency = (value: string): number | null => {
   return isNaN(parsed) ? null : parsed;
 };
 
+// Formata número para moeda brasileira (R$)
+export const formatCurrency = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined || value === "") return "R$ 0,00";
+  const numValue = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(numValue)) return "R$ 0,00";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(numValue);
+};
+
 // Formata valor enquanto digita (máscara de moeda)
 // Só aplica a máscara se o valor não estiver já formatado
 export const formatCurrencyOnInput = (value: string): string => {
@@ -258,53 +261,25 @@ export const formatCurrencyOnInput = (value: string): string => {
   }).format(numValue);
 };
 
-// Padronização de texto: primeira letra de cada palavra maiúscula, resto minúsculo
-// Siglas de estado brasileiras são totalmente maiúsculas (SP, RJ, MG, etc)
+// Padronização de texto: TUDO EM LETRAS MAIÚSCULAS
 export const standardizeText = (text: string): string => {
   if (!text || typeof text !== "string") return text;
   const trimmed = text.trim();
   if (!trimmed) return trimmed;
   
-  // Lista de siglas de estado brasileiras (devem ser totalmente maiúsculas)
-  const stateAbbreviations = new Set([
-    "ac", "al", "am", "ap", "ba", "ce", "df", "es", "go", "ma", "mg", "ms",
-    "mt", "pa", "pb", "pe", "pi", "pr", "rj", "rn", "ro", "rr", "rs", "sc",
-    "se", "sp", "to"
-  ]);
+  // Tudo em letras maiúsculas
+  return trimmed.toUpperCase();
+};
+
+// Padronização: TUDO EM LETRAS MAIÚSCULAS
+// Usado para leads e outros campos que precisam desse padrão específico
+export const capitalizeFirstLetter = (text: string): string => {
+  if (!text || typeof text !== "string") return text;
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
   
-  // Divide por espaços (um ou mais) e capitaliza cada palavra
-  // Mantém os espaços entre as palavras
-  return trimmed
-    .split(/\s+/)
-    .map((word) => {
-      if (!word) return word;
-      
-      // Se a palavra contém hífen, processa cada parte
-      if (word.includes("-")) {
-        return word
-          .split("-")
-          .map((part) => {
-            if (!part) return part;
-            const lowerPart = part.toLowerCase();
-            // Se for sigla de estado, deixa totalmente maiúscula
-            if (stateAbbreviations.has(lowerPart)) {
-              return part.toUpperCase();
-            }
-            return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
-          })
-          .join("-");
-      }
-      
-      // Verifica se é sigla de estado
-      const lowerWord = word.toLowerCase();
-      if (stateAbbreviations.has(lowerWord)) {
-        return word.toUpperCase(); // Sigla de estado totalmente maiúscula
-      }
-      
-      // Capitaliza a primeira letra e deixa o resto minúsculo
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    })
-    .join(" ");
+  // Tudo em letras maiúsculas
+  return trimmed.toUpperCase();
 };
 
 // Handler para aplicar padronização automaticamente em inputs de texto
@@ -320,4 +295,90 @@ export const handleStandardizeInput = (
     // Se o valor estiver vazio, limpa o campo
     setValue("");
   }
+};
+
+// Handler específico para leads: TUDO EM LETRAS MAIÚSCULAS
+export const handleCapitalizeLeadInput = (
+  value: string,
+  setValue: (value: string) => void
+) => {
+  if (value && typeof value === "string" && value.trim()) {
+    const capitalized = capitalizeFirstLetter(value);
+    setValue(capitalized);
+  } else if (!value || !value.trim()) {
+    setValue("");
+  }
+};
+
+// Função para normalizar valores de campos com CHECK constraints do banco
+// Preserva os valores exatos esperados pelas constraints
+export const normalizeConstraintValue = (field: string, value: string | null | undefined): string | null => {
+  if (!value || typeof value !== "string") return value || null;
+  
+  const trimmed = value.trim().toUpperCase();
+  
+  // Mapeamento de campos com constraints específicas
+  const constraintMaps: Record<string, Record<string, string>> = {
+    // cattle.health_status: 'Boa', 'Regular', 'Ruim'
+    health_status: {
+      'BOA': 'Boa',
+      'REGULAR': 'Regular',
+      'RUIM': 'Ruim',
+    },
+    // properties.documentation_status: 'PAGO', 'PENDENTE', 'ATRASADO'
+    documentation_status: {
+      'PAGO': 'PAGO',
+      'PENDENTE': 'PENDENTE',
+      'ATRASADO': 'ATRASADO',
+    },
+    // properties.water_ownership e energy_ownership: 'PROPRIO', 'TERCEIROS'
+    water_ownership: {
+      'PROPRIO': 'PROPRIO',
+      'TERCEIROS': 'TERCEIROS',
+    },
+    energy_ownership: {
+      'PROPRIO': 'PROPRIO',
+      'TERCEIROS': 'TERCEIROS',
+    },
+    // leads.status: 'Inicial', 'Em Andamento', 'Concluído', 'Cancelado'
+    lead_status: {
+      'INICIAL': 'Inicial',
+      'EM ANDAMENTO': 'Em Andamento',
+      'CONCLUÍDO': 'Concluído',
+      'CONCLUIDO': 'Concluído',
+      'CANCELADO': 'Cancelado',
+    },
+    // reminders.status: 'pendente', 'em_andamento', 'concluida'
+    reminder_status: {
+      'PENDENTE': 'pendente',
+      'EM ANDAMENTO': 'em_andamento',
+      'EM_ANDAMENTO': 'em_andamento',
+      'CONCLUÍDA': 'concluida',
+      'CONCLUIDA': 'concluida',
+    },
+    // reminders.priority: 'baixa', 'media', 'alta'
+    priority: {
+      'BAIXA': 'baixa',
+      'MÉDIA': 'media',
+      'MEDIA': 'media',
+      'ALTA': 'alta',
+    },
+    // legal_processes.status: 'active', 'pending', 'closed'
+    process_status: {
+      'ATIVO': 'active',
+      'ACTIVE': 'active',
+      'PENDENTE': 'pending',
+      'PENDING': 'pending',
+      'ENCERRADO': 'closed',
+      'CLOSED': 'closed',
+    },
+  };
+  
+  const map = constraintMaps[field];
+  if (map && map[trimmed]) {
+    return map[trimmed];
+  }
+  
+  // Se não houver mapeamento específico, retorna em maiúsculas (padrão do sistema)
+  return trimmed;
 };

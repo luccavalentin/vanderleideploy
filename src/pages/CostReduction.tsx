@@ -68,20 +68,24 @@ export default function CostReduction() {
     notes: "",
   });
 
-  const { data: ideas = [] } = useQuery({
+  const { data: ideas = [], error: ideasError } = useQuery({
     queryKey: ["cost_reduction_ideas"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cost_reduction_ideas")
         .select("*")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao buscar ideias:", error);
+        throw error;
+      }
       return data || [];
     },
     staleTime: 30000, // Cache por 30 segundos
+    retry: 1,
   });
 
-  const { data: plans = [] } = useQuery({
+  const { data: plans = [], error: plansError } = useQuery({
     queryKey: ["business_growth_plans"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -89,10 +93,14 @@ export default function CostReduction() {
         .select("*")
         .eq("type", "cost_reduction")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao buscar planejamentos:", error);
+        throw error;
+      }
       return data || [];
     },
     staleTime: 30000, // Cache por 30 segundos
+    retry: 1,
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredIdeas } = useSmartSearch(
@@ -245,6 +253,22 @@ export default function CostReduction() {
 
   const handleSubmitPlan = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validar e parsear milestones com tratamento de erro
+    let parsedMilestones = null;
+    if (planFormData.milestones && planFormData.milestones.trim()) {
+      try {
+        parsedMilestones = JSON.parse(planFormData.milestones);
+      } catch (error) {
+        toast({
+          title: "Erro no formato JSON",
+          description: "O campo 'Marcos/Metas' contém JSON inválido. Por favor, corrija o formato.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     const data = {
       title: standardizeText(planFormData.title),
       description: planFormData.description ? standardizeText(planFormData.description) : null,
@@ -254,9 +278,9 @@ export default function CostReduction() {
       start_date: planFormData.start_date || null,
       end_date: planFormData.end_date || null,
       status: planFormData.status,
-      progress_percentage: planFormData.progress_percentage,
+      progress_percentage: planFormData.progress_percentage || 0,
       responsible_person: planFormData.responsible_person ? standardizeText(planFormData.responsible_person) : null,
-      milestones: planFormData.milestones ? JSON.parse(planFormData.milestones) : null,
+      milestones: parsedMilestones,
       resources_needed: planFormData.resources_needed ? standardizeText(planFormData.resources_needed) : null,
       risks: planFormData.risks ? standardizeText(planFormData.risks) : null,
       success_metrics: planFormData.success_metrics ? standardizeText(planFormData.success_metrics) : null,
@@ -290,6 +314,25 @@ export default function CostReduction() {
 
   const handleEditPlan = (plan: any) => {
     setEditingPlanId(plan.id);
+    
+    // Parsear milestones com segurança
+    let milestonesString = "";
+    if (plan.milestones) {
+      try {
+        if (typeof plan.milestones === 'string') {
+          // Se já é string, tentar parsear e formatar
+          const parsed = JSON.parse(plan.milestones);
+          milestonesString = JSON.stringify(parsed, null, 2);
+        } else {
+          // Se é objeto, apenas stringify
+          milestonesString = JSON.stringify(plan.milestones, null, 2);
+        }
+      } catch (error) {
+        // Se houver erro, deixar vazio
+        milestonesString = "";
+      }
+    }
+    
     setPlanFormData({
       title: plan.title || "",
       description: plan.description || "",
@@ -300,7 +343,7 @@ export default function CostReduction() {
       status: plan.status || "planejamento",
       progress_percentage: plan.progress_percentage || 0,
       responsible_person: plan.responsible_person || "",
-      milestones: plan.milestones ? JSON.stringify(plan.milestones, null, 2) : "",
+      milestones: milestonesString,
       resources_needed: plan.resources_needed || "",
       risks: plan.risks || "",
       success_metrics: plan.success_metrics || "",
@@ -823,7 +866,13 @@ export default function CostReduction() {
       </Dialog>
 
       {/* Dialog para Planejamentos */}
-      <Dialog open={isPlanDialogOpen} onOpenChange={(open) => !open && handleClosePlanDialog()}>
+      <Dialog open={isPlanDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleClosePlanDialog();
+        } else {
+          setIsPlanDialogOpen(true);
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingPlanId ? "Editar Planejamento" : "Novo Planejamento"}</DialogTitle>
@@ -845,14 +894,14 @@ export default function CostReduction() {
               <div className="space-y-2">
                 <Label htmlFor="related_idea_id">Ideia Relacionada (Opcional)</Label>
                 <Select
-                  value={planFormData.related_idea_id}
-                  onValueChange={(value) => setPlanFormData({ ...planFormData, related_idea_id: value })}
+                  value={planFormData.related_idea_id || "none"}
+                  onValueChange={(value) => setPlanFormData({ ...planFormData, related_idea_id: value === "none" ? "" : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma ideia" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma</SelectItem>
+                    <SelectItem value="none">Nenhuma</SelectItem>
                     {ideas.map((idea: any) => (
                       <SelectItem key={idea.id} value={idea.id}>
                         {idea.title}

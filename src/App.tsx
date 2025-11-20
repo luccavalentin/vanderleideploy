@@ -8,6 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PageLoader } from "@/components/ui/PageLoader";
+import { ScrollIndicator } from "@/components/ui/ScrollIndicator";
 
 // Lazy loading para melhor performance - carrega apenas quando necessário
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -84,11 +85,11 @@ const queryClient = new QueryClient({
         return failureCount < 2;
       },
       retryDelay: 1000,
-      staleTime: 60000, // Cache por 60 segundos (aumentado para melhor performance)
-      gcTime: 300000, // 5 minutos (antigo cacheTime)
+      staleTime: 300000, // Cache por 5 minutos (aumentado para melhor performance)
+      gcTime: 600000, // 10 minutos (antigo cacheTime)
       refetchOnWindowFocus: false,
-      refetchOnMount: false, // Não refetch se dados estão frescos (melhor performance)
-      refetchOnReconnect: true,
+      refetchOnMount: true, // Buscar na montagem inicial (mas respeita staleTime)
+      refetchOnReconnect: false, // Não refetch ao reconectar (dados já estão em cache)
       // Prefetch de queries relacionadas
       structuralSharing: true, // Mantém referências de objetos quando possível
       // Network mode otimizado
@@ -162,8 +163,9 @@ const App = () => (
                 <ProtectedRoute>
                   <div className="flex min-h-screen bg-background overflow-x-hidden w-full max-w-full">
                     <AppSidebar />
-                    <main className="flex-1 md:ml-64 p-2 sm:p-3 md:p-4 lg:p-6 xl:p-8 w-full max-w-full overflow-x-hidden">
-                      <div className="w-full max-w-full overflow-x-hidden">
+                    <ScrollIndicator />
+                    <main className="flex-1 md:ml-64 pt-16 md:pt-0 p-3 sm:p-4 md:p-4 lg:p-6 xl:p-8 w-full max-w-full overflow-x-hidden">
+                      <div className="w-full max-w-full overflow-x-hidden px-1 sm:px-0">
                         <Routes>
                         <Route 
                           path="/" 

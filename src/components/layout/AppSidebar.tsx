@@ -19,7 +19,11 @@ import {
   X,
   LogOut,
   TrendingUp as GrowthIcon,
-  Target
+  Target,
+  ArrowRight,
+  Home,
+  Key,
+  DollarSign as DollarSignIcon
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
@@ -38,7 +42,6 @@ const menuItems = [
   { icon: Scale, label: "Escritórios e Processos", path: "/processos" },
   { icon: UserCircle, label: "Clientes", path: "/clientes" },
   { icon: PawPrint, label: "Gado", path: "/gado" },
-  { icon: Building2, label: "Imóveis", path: "/imoveis" },
   { icon: FileCheck, label: "Leads", path: "/leads" },
   { icon: NotebookPen, label: "Anotações", path: "/anotacoes" },
 ];
@@ -56,11 +59,21 @@ const crescimentoSubItems = [
   { icon: TrendingUp, label: "Otimização de Receita", path: "/crescimento-negocios/otimizacao-receita" },
 ];
 
+const imoveisSubItems = [
+  { icon: Building2, label: "Lista de Imóveis", path: "/imoveis" },
+  { icon: Key, label: "Locação", path: "/imoveis?tipo=locacao" },
+  { icon: Home, label: "Venda", path: "/imoveis?tipo=venda" },
+  { icon: TrendingUp, label: "Receitas de Imóveis", path: "/receitas?linked_source=Imóveis" },
+  { icon: TrendingDown, label: "Despesas de Imóveis", path: "/despesas?linked_source=Imóveis" },
+];
+
 const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
   const [isFinanceiroOpen, setIsFinanceiroOpen] = useState(false);
   const [isFinanceiroClicked, setIsFinanceiroClicked] = useState(false);
   const [isCrescimentoOpen, setIsCrescimentoOpen] = useState(false);
   const [isCrescimentoClicked, setIsCrescimentoClicked] = useState(false);
+  const [isImoveisOpen, setIsImoveisOpen] = useState(false);
+  const [isImoveisClicked, setIsImoveisClicked] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -104,6 +117,13 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
                              location.pathname === "/emprestimos" ||
                              location.pathname === "/aplicacoes";
   const isCrescimentoActive = crescimentoSubItems.some(item => location.pathname === item.path) || location.pathname === "/crescimento-negocios";
+  const isImoveisActive = imoveisSubItems.some(item => {
+    const path = item.path.split('?')[0];
+    return location.pathname === path || 
+           (location.pathname === "/imoveis" && location.search.includes(item.path.split('?')[1]?.split('=')[1] || '')) ||
+           (location.pathname === "/receitas" && location.search.includes("Imóveis")) ||
+           (location.pathname === "/despesas" && location.search.includes("Imóveis"));
+  }) || location.pathname === "/imoveis";
 
   // Abre automaticamente se algum subitem estiver ativo
   useEffect(() => {
@@ -115,7 +135,11 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
       setIsCrescimentoOpen(true);
       setIsCrescimentoClicked(true);
     }
-  }, [isFinanceiroActive, isCrescimentoActive]);
+    if (isImoveisActive) {
+      setIsImoveisOpen(true);
+      setIsImoveisClicked(true);
+    }
+  }, [isFinanceiroActive, isCrescimentoActive, isImoveisActive]);
 
   // Limpa o destaque quando navega para um menu que não é do "Meu Financeiro"
   useEffect(() => {
@@ -129,7 +153,17 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
     if (!isCrescimentoRoute && !isCrescimentoOpen) {
       setIsCrescimentoClicked(false);
     }
-  }, [location.pathname, isFinanceiroOpen, isCrescimentoOpen]);
+    const isImoveisRoute = imoveisSubItems.some(item => {
+      const path = item.path.split('?')[0];
+      return location.pathname === path || 
+             (location.pathname === "/imoveis" && location.search.includes(item.path.split('?')[1]?.split('=')[1] || '')) ||
+             (location.pathname === "/receitas" && location.search.includes("Imóveis")) ||
+             (location.pathname === "/despesas" && location.search.includes("Imóveis"));
+    }) || location.pathname === "/imoveis";
+    if (!isImoveisRoute && !isImoveisOpen) {
+      setIsImoveisClicked(false);
+    }
+  }, [location.pathname, isFinanceiroOpen, isCrescimentoOpen, isImoveisOpen]);
 
   // Handler para clicar no menu "Meu Financeiro"
   const handleFinanceiroClick = () => {
@@ -151,9 +185,20 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
     }
   };
 
+  // Handler para clicar no menu "Gestão de Imóveis"
+  const handleImoveisClick = () => {
+    try {
+      setIsImoveisOpen(true);
+      setIsImoveisClicked(true);
+    } catch (error) {
+      console.error("Erro ao abrir menu imóveis:", error);
+    }
+  };
+
   // Verifica se o menu deve ser destacado (ativo ou quando está aberto e foi clicado)
   const shouldHighlightFinanceiro = isFinanceiroActive || (isFinanceiroClicked && isFinanceiroOpen);
   const shouldHighlightCrescimento = isCrescimentoActive || (isCrescimentoClicked && isCrescimentoOpen);
+  const shouldHighlightImoveis = isImoveisActive || (isImoveisClicked && isImoveisOpen);
 
   // Busca nome do usuário
   const userName = localStorage.getItem("userName") || "Usuário";
@@ -289,27 +334,53 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
               </NavLink>
             </li>
 
-            {/* 7. Imóveis */}
+            {/* 7. Gestão de Imóveis */}
             <li>
-              <NavLink
-                to="/imoveis"
-                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
-                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
-                onClick={onNavigate}
-              >
-                <Building2 className="w-5 h-5 icon-professional" strokeWidth={2.5} />
-                <span className="whitespace-nowrap">Imóveis</span>
-              </NavLink>
+              <Collapsible open={isImoveisOpen} onOpenChange={setIsImoveisOpen}>
+                <CollapsibleTrigger
+                  onClick={handleImoveisClick}
+                  className={cn(
+                    "w-full group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 font-medium",
+                    shouldHighlightImoveis && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                  )}
+                >
+                  <div className="relative w-6 h-6 flex items-center justify-center">
+                    <Building2 className="w-6 h-6 icon-professional text-sidebar-foreground" strokeWidth={2.5} />
+                  </div>
+                  <span className="flex-1 text-left whitespace-nowrap">Gestão de Imóveis</span>
+                  <ChevronDown className={cn(
+                    "w-4 h-4 transition-transform duration-75",
+                    isImoveisOpen && "transform rotate-180"
+                  )} />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="overflow-hidden">
+                  <ul className="ml-4 mt-1 space-y-1 border-l border-sidebar-border/50 pl-4 sidebar-submenu">
+                    {imoveisSubItems.map((item) => (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sidebar-foreground/80 text-sm font-medium"
+                          activeClassName=""
+                          onClick={onNavigate}
+                        >
+                          <item.icon className="w-4 h-4 icon-professional" strokeWidth={2.5} />
+                          <span className="whitespace-nowrap">{item.label}</span>
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
             </li>
 
             {/* 8. Leads */}
             <li>
               <NavLink
                 to="/leads"
-                className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
-                activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
-                onClick={onNavigate}
-              >
+                    className="group flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/90 transition-colors duration-150 font-medium"
+                    activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
+                    onClick={onNavigate}
+                  >
                 <FileCheck className="w-5 h-5 icon-professional" strokeWidth={2.5} />
                 <span className="whitespace-nowrap">Leads</span>
               </NavLink>
@@ -325,7 +396,10 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
                     shouldHighlightCrescimento && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm"
                   )}
                 >
-                  <GrowthIcon className="w-5 h-5 icon-professional" strokeWidth={2.5} />
+                  <div className="relative w-6 h-6 flex items-center justify-center">
+                    <Target className="w-6 h-6 icon-professional text-sidebar-foreground" strokeWidth={3} />
+                    <ArrowRight className="absolute w-3 h-3 icon-professional text-sidebar-foreground" strokeWidth={3} />
+                  </div>
                   <span className="flex-1 text-left whitespace-nowrap">Crescimento dos Negócios</span>
                   <ChevronDown className={cn(
                     "w-4 h-4 transition-transform duration-75",
@@ -354,10 +428,10 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
                           onClick={onNavigate}
                         >
                           <item.icon className="w-4 h-4 icon-professional" strokeWidth={2.5} />
-                          <span className="whitespace-nowrap">{item.label}</span>
-                        </NavLink>
-                      </li>
-                    ))}
+                    <span className="whitespace-nowrap">{item.label}</span>
+                  </NavLink>
+                </li>
+              ))}
                   </ul>
                 </CollapsibleContent>
               </Collapsible>
@@ -415,13 +489,13 @@ export function AppSidebar() {
       <>
         {/* Header Mobile com Menu Hambúrguer */}
         <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-sidebar border-b border-sidebar-border shadow-lg md:hidden">
-          <div className="flex items-center justify-between h-full px-4">
+          <div className="flex items-center justify-between h-full px-2 sm:px-3 gap-2">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-10 w-10 relative group hover:bg-sidebar-accent/50 transition-all duration-200"
+                  className="h-10 w-10 flex-shrink-0 relative group hover:bg-sidebar-accent/50 transition-all duration-200"
                 >
                   {/* Barrinhas animadas do menu */}
                   <div className="flex flex-col gap-1.5 items-center justify-center w-6 h-6">
@@ -438,23 +512,25 @@ export function AppSidebar() {
               </SheetContent>
             </Sheet>
             
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+              <div className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="sm:w-[18px] sm:h-[18px]">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-1.61-2.31 0-3.35-.89-3.35-2.56 0-1.51 1.22-2.48 3.12-2.84V6h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.39s3.35.83 3.35 2.61c.01 1.6-1.21 2.48-3.29 2.84z" fill="white"/>
                 </svg>
               </div>
-              <div className="flex flex-col min-w-0 flex-1">
-                <h1 className="text-sm font-bold text-sidebar-foreground tracking-tight leading-tight truncate">
+              <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                <h1 className="text-xs sm:text-sm font-bold text-sidebar-foreground tracking-tight leading-tight truncate">
                   Sistema de Gestão VANDE
                 </h1>
-                <p className="text-xs text-sidebar-foreground/70 truncate">
+                <p className="text-[10px] sm:text-xs text-sidebar-foreground/70 truncate">
                   {localStorage.getItem("userName") || "Usuário"}
                 </p>
               </div>
             </div>
             
+            <div className="flex-shrink-0">
             <ThemeToggle />
+            </div>
           </div>
         </header>
 

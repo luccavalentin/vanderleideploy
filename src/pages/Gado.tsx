@@ -24,7 +24,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { standardizeText, handleStandardizeInput, formatCurrencyInput, parseCurrency } from "@/lib/validations";
+import { standardizeText, handleStandardizeInput, formatCurrencyInput, parseCurrency, normalizeConstraintValue } from "@/lib/validations";
 import * as XLSX from "xlsx";
 
 export default function Gado() {
@@ -73,7 +73,11 @@ export default function Gado() {
     },
     retry: 2,
     retryDelay: 1000,
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredCattle, resultCount, totalCount } = useSmartSearch(
@@ -87,7 +91,10 @@ export default function Gado() {
     let filtered = filteredCattle;
     
     if (categoryFilter !== "all") {
-      filtered = filtered.filter((c: any) => c.category === categoryFilter);
+      filtered = filtered.filter((c: any) => {
+        const category = (c.category || "").trim();
+        return category === categoryFilter || category.toUpperCase() === categoryFilter.toUpperCase();
+      });
     }
     
     if (healthFilter !== "all") {
@@ -103,21 +110,45 @@ export default function Gado() {
   const stats = useMemo(() => {
     if (!cattle) return { total: "0", femeas: "0", machos: "0", totalValue: 0, totalQuantity: 0 };
     
-    const total = cattle.length;
-    const femeas = cattle.filter((c: any) => c.category === "Fêmea").length;
-    const machos = cattle.filter((c: any) => c.category === "Macho").length;
-    // Quantidade total: soma todas as quantidades de cada lote
-    const totalQuantity = cattle.reduce((sum: number, c: any) => {
+    // Soma as quantidades de fêmeas (não conta registros, soma as quantidades)
+    // Compara "Fêmea" (padronizado) e variações em maiúsculas/minúsculas
+    const femeas = cattle
+      .filter((c: any) => {
+        const category = (c.category || "").trim();
+        const categoryUpper = category.toUpperCase();
+        return category === "Fêmea" || categoryUpper === "FÊMEA" || categoryUpper === "FEMEA" || categoryUpper === "BEZERRA" || categoryUpper === "NOVILHA";
+      })
+      .reduce((sum: number, c: any) => {
       const quantity = parseInt(c.quantity) || 0;
       return sum + quantity;
     }, 0);
     
+    // Soma as quantidades de machos (não conta registros, soma as quantidades)
+    // Compara "Macho" (padronizado) e variações em maiúsculas/minúsculas
+    const machos = cattle
+      .filter((c: any) => {
+        const category = (c.category || "").trim();
+        const categoryUpper = category.toUpperCase();
+        return category === "Macho" || categoryUpper === "MACHO" || categoryUpper === "BEZERRO" || categoryUpper === "NOVILHO";
+      })
+      .reduce((sum: number, c: any) => {
+        const quantity = parseInt(c.quantity) || 0;
+        return sum + quantity;
+      }, 0);
+    
+    // Quantidade total: soma todas as quantidades de cada lote (fêmeas + machos)
+    const totalQuantity = femeas + machos;
+    
+    // Total de registros (para informação, mas não usado nos cards principais)
+    const totalRegistros = cattle.length;
+    
     return { 
-      total: total.toString(), 
+      total: totalQuantity.toString(), // Total de gado (soma de fêmeas + machos)
       femeas: femeas.toString(), 
       machos: machos.toString(), 
       totalValue: 0, // Não usado mais, o valor total vem do weightCalculator
-      totalQuantity: totalQuantity.toString()
+      totalQuantity: totalQuantity.toString(),
+      totalRegistros: totalRegistros.toString() // Total de registros/lotes
     };
   }, [cattle]);
 
@@ -203,6 +234,7 @@ export default function Gado() {
   };
 
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -210,8 +242,10 @@ export default function Gado() {
       if (error) throw error;
     },
     onSuccess: async () => {
+      // Invalidar e refetch para garantir que os dados sejam atualizados
       await queryClient.invalidateQueries({ queryKey: ["cattle"] });
       await queryClient.refetchQueries({ queryKey: ["cattle"] });
+      setIsSubmitting(false);
       // toast({ title: "Gado cadastrado com sucesso!" });
       if (keepDialogOpen) {
         setFormData({
@@ -232,6 +266,7 @@ export default function Gado() {
       }
     },
     onError: (error: any) => {
+      setIsSubmitting(false);
       toast({
         title: "Erro ao cadastrar gado",
         description: error.message || "Ocorreu um erro ao salvar. Tente novamente.",
@@ -246,12 +281,15 @@ export default function Gado() {
       if (error) throw error;
     },
     onSuccess: async () => {
+      // Invalidar e refetch para garantir que os dados sejam atualizados
       await queryClient.invalidateQueries({ queryKey: ["cattle"] });
       await queryClient.refetchQueries({ queryKey: ["cattle"] });
+      setIsSubmitting(false);
       toast({ title: "Gado atualizado com sucesso!" });
       handleCloseDialog();
     },
     onError: (error: any) => {
+      setIsSubmitting(false);
       toast({
         title: "Erro ao atualizar gado",
         description: error.message || "Ocorreu um erro ao atualizar. Tente novamente.",
@@ -390,35 +428,45 @@ export default function Gado() {
 
   const handleSubmitAndNew = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setKeepDialogOpen(true);
+    setIsSubmitting(true);
     await handleSubmitLogic();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setKeepDialogOpen(false);
+    setIsSubmitting(true);
     await handleSubmitLogic();
   };
 
   const handleSubmitLogic = async () => {
-    // Calcular valor baseado no peso se fornecido
-    // VALOR DO ARROBA X A QUANTIDADE DE KG = VALOR TOTAL
-    let calculatedPrice = formData.purchase_price ? parseFloat(formData.purchase_price) : null;
-    if (formData.weight && parseFloat(formData.weight) > 0) {
-      const weightKg = parseFloat(formData.weight);
-      calculatedPrice = arrobaPrice * weightKg;
+    // Normalizar category para "Fêmea" ou "Macho" (primeira letra maiúscula, resto minúscula)
+    let normalizedCategory = formData.category || null;
+    if (normalizedCategory) {
+      const categoryUpper = normalizedCategory.toUpperCase().trim();
+      if (categoryUpper === "FÊMEA" || categoryUpper === "FEMEA" || categoryUpper === "BEZERRA" || categoryUpper === "NOVILHA") {
+        normalizedCategory = "Fêmea";
+      } else if (categoryUpper === "MACHO" || categoryUpper === "BEZERRO" || categoryUpper === "NOVILHO") {
+        normalizedCategory = "Macho";
+      } else {
+        // Se não for reconhecido, mantém o valor original mas padroniza
+        normalizedCategory = normalizedCategory.charAt(0).toUpperCase() + normalizedCategory.slice(1).toLowerCase();
+      }
     }
-    
+
     const data = {
       description: formData.description ? standardizeText(formData.description) : null,
-      category: formData.category ? standardizeText(formData.category) : null,
+      category: normalizedCategory,
       location: formData.location ? standardizeText(formData.location) : null,
       origin: formData.origin ? standardizeText(formData.origin) : null,
-      health_status: formData.health_status ? standardizeText(formData.health_status) : null,
+      health_status: normalizeConstraintValue("health_status", formData.health_status), // Normaliza para 'Boa', 'Regular', 'Ruim'
       quantity: formData.quantity ? parseInt(formData.quantity) : 1,
       age_months: formData.age_months ? parseInt(formData.age_months) : null,
       weight: formData.weight ? parseFloat(formData.weight) : null,
-      purchase_price: calculatedPrice,
+      purchase_price: formData.purchase_price ? parseFloat(formData.purchase_price) : null,
       purchase_date: formData.purchase_date || null,
     };
 
@@ -449,6 +497,7 @@ export default function Gado() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingId(null);
+    setIsSubmitting(false);
     setFormData({
       description: "",
       category: "Fêmea",
@@ -498,9 +547,9 @@ export default function Gado() {
             <div className="flex-1 w-full">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <Package className="w-5 h-5 text-primary" />
-                  Calculadora de Gado
-                </h3>
+                <Package className="w-5 h-5 text-primary" />
+                Calculadora de Gado
+              </h3>
                 <Button
                   variant="outline"
                   size="sm"
@@ -563,16 +612,16 @@ export default function Gado() {
                     </p>
                   ) : (
                     <>
-                      <p className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold break-words leading-tight ${weightCalculator.totalValue >= 0 ? 'text-success' : 'text-destructive'}`} style={{ 
-                        wordBreak: 'break-word', 
-                        overflowWrap: 'break-word',
-                        lineHeight: '1.2'
-                      }}>
-                        {formatCurrency(weightCalculator.totalValue)}
-                      </p>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-2 pt-2 border-t border-border/30">
-                        Venda: {formatCurrency(weightCalculator.totalSaleValue)} | Custo: {formatCurrency(weightCalculator.totalCost)}
-                      </p>
+                  <p className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold break-words leading-tight ${weightCalculator.totalValue >= 0 ? 'text-success' : 'text-destructive'}`} style={{ 
+                    wordBreak: 'break-word', 
+                    overflowWrap: 'break-word',
+                    lineHeight: '1.2'
+                  }}>
+                    {formatCurrency(weightCalculator.totalValue)}
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-2 pt-2 border-t border-border/30">
+                    Venda: {formatCurrency(weightCalculator.totalSaleValue)} | Custo: {formatCurrency(weightCalculator.totalCost)}
+                  </p>
                     </>
                   )}
                 </div>
@@ -632,7 +681,7 @@ export default function Gado() {
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatsCard
-          title="Total de Registros"
+          title="Total de Gado"
           value={stats.total}
           icon={Package}
           className="bg-gradient-to-br from-primary/10 to-primary/5"
@@ -672,8 +721,8 @@ export default function Gado() {
           }}
         />
         <StatsCard
-          title="Valor Total"
-          value={formatCurrency(weightCalculator.totalValue)}
+          title="Valor Total de Venda"
+          value={formatCurrency(weightCalculator.totalSaleValue)}
           icon={DollarSign}
           variant="warning"
           className="bg-gradient-to-br from-warning/10 to-warning/5"
@@ -850,9 +899,18 @@ export default function Gado() {
             </DialogTitle>
           </DialogHeader>
           {selectedStat && (() => {
+            // Verificar se cattle está carregando ou vazio
+            if (cattleLoading) {
+              return <div className="text-muted-foreground">Carregando dados...</div>;
+            }
+            
+            if (!cattle || cattle.length === 0) {
+              return <div className="text-muted-foreground">Nenhum lote de gado cadastrado.</div>;
+            }
+            
             // Se for "value", mostrar explicação detalhada do cálculo
             if (selectedStat === "value") {
-              const itemsToShow = sortedCattle || [];
+              const itemsToShow = cattle || [];
               if (itemsToShow.length === 0) {
                 return <div className="text-muted-foreground">Nenhum lote de gado cadastrado.</div>;
               }
@@ -935,8 +993,8 @@ export default function Gado() {
             
             // Se for um filtro (total, quantity), mostrar lista de registros
             if (selectedStat === "total" || selectedStat === "quantity") {
-              const itemsToShow = sortedCattle || [];
-              if (itemsToShow.length === 0) {
+              const itemsToShow = cattle || [];
+              if (!itemsToShow || itemsToShow.length === 0) {
                 return <div className="text-muted-foreground">Nenhum lote de gado cadastrado.</div>;
               }
               return (
@@ -974,12 +1032,32 @@ export default function Gado() {
                 </div>
               );
             } else if (selectedStat === "femeas") {
-              const femeas = (sortedCattle || []).filter((c: any) => c.category === "Fêmea" || c.category === "Bezerra" || c.category === "Novilha");
-              if (femeas.length === 0) {
-                return <div className="text-muted-foreground">Nenhuma fêmea cadastrada.</div>;
+              // Usar cattle diretamente ao invés de sortedCattle para garantir que todos os dados estão disponíveis
+              if (!cattle || cattle.length === 0) {
+                return <div className="text-muted-foreground">Nenhum gado cadastrado.</div>;
               }
+              
+              const femeas = cattle.filter((c: any) => {
+                if (!c || !c.category) return false;
+                const category = (c.category || "").trim();
+                const categoryUpper = category.toUpperCase();
+                return category === "Fêmea" || categoryUpper === "FÊMEA" || categoryUpper === "FEMEA" || categoryUpper === "BEZERRA" || categoryUpper === "NOVILHA";
+              });
+              
+              if (!femeas || femeas.length === 0) {
+                return (
+                  <div className="text-muted-foreground">
+                    <p>Nenhuma fêmea cadastrada.</p>
+                    <p className="text-xs mt-2">Total de registros: {cattle.length}</p>
+                  </div>
+                );
+              }
+              
               return (
                 <div className="space-y-4">
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Total de fêmeas: {femeas.length} lote(s)
+                  </div>
                   {femeas.map((item: any) => (
                     <div key={item.id} className="border-b border-border/30 pb-3 space-y-3">
                       <div className="font-semibold">{item.description || "Sem descrição"}</div>
@@ -1013,12 +1091,32 @@ export default function Gado() {
                 </div>
               );
             } else if (selectedStat === "machos") {
-              const machos = (sortedCattle || []).filter((c: any) => c.category === "Macho");
-              if (machos.length === 0) {
-                return <div className="text-muted-foreground">Nenhum macho cadastrado.</div>;
+              // Usar cattle diretamente ao invés de sortedCattle para garantir que todos os dados estão disponíveis
+              if (!cattle || cattle.length === 0) {
+                return <div className="text-muted-foreground">Nenhum gado cadastrado.</div>;
               }
+              
+              const machos = cattle.filter((c: any) => {
+                if (!c || !c.category) return false;
+                const category = (c.category || "").trim();
+                const categoryUpper = category.toUpperCase();
+                return category === "Macho" || categoryUpper === "MACHO" || categoryUpper === "BEZERRO" || categoryUpper === "NOVILHO";
+              });
+              
+              if (!machos || machos.length === 0) {
+                return (
+                  <div className="text-muted-foreground">
+                    <p>Nenhum macho cadastrado.</p>
+                    <p className="text-xs mt-2">Total de registros: {cattle.length}</p>
+                  </div>
+                );
+              }
+              
               return (
                 <div className="space-y-4">
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Total de machos: {machos.length} lote(s)
+                  </div>
                   {machos.map((item: any) => (
                     <div key={item.id} className="border-b border-border/30 pb-3 space-y-3">
                       <div className="font-semibold">{item.description || "Sem descrição"}</div>
@@ -1205,21 +1303,11 @@ export default function Gado() {
                   type="number"
                   step="0.01"
                   value={formData.weight}
-                  onChange={(e) => {
-                    const weight = e.target.value;
-                    // Calcular valor automaticamente: VALOR DO ARROBA X A QUANTIDADE DE KG = VALOR TOTAL
-                    if (weight && parseFloat(weight) > 0) {
-                      const weightKg = parseFloat(weight);
-                      const calculatedPrice = arrobaPrice * weightKg;
-                      setFormData({ ...formData, weight, purchase_price: calculatedPrice.toFixed(2) });
-                    } else {
-                      setFormData({ ...formData, weight });
-                    }
-                  }}
+                  onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
                   placeholder="Ex: 450 (kg)"
                 />
                 <p className="text-xs text-muted-foreground">
-                  O valor será calculado automaticamente: 1 @ = 15 kg = {formatCurrency(arrobaPrice)} (opcional)
+                  1 @ = 15 kg (opcional)
                 </p>
               </div>
             </div>
@@ -1233,22 +1321,20 @@ export default function Gado() {
                   step="0.01"
                   value={formData.purchase_price}
                   onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
-                  placeholder="Preenchido automaticamente pelo peso"
+                  placeholder="Informe o valor de compra (opcional)"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {formData.weight && parseFloat(formData.weight) > 0 
-                    ? `Calculado: ${formatCurrency(arrobaPrice)} × ${parseFloat(formData.weight)} kg = ${formatCurrency(arrobaPrice * parseFloat(formData.weight))}`
-                    : "Ou informe manualmente"}
+                  Informe manualmente o valor pago na compra (opcional)
                 </p>
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={handleCloseDialog}>
+              <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button type="submit">
-                {editingId ? "Atualizar" : "Cadastrar"}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Salvando..." : editingId ? "Atualizar" : "Cadastrar"}
               </Button>
             </div>
           </form>

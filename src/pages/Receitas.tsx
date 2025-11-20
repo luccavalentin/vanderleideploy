@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,13 +21,15 @@ import { SmartSearchInput } from "@/components/SmartSearchInput";
 import { Pencil, Trash2, Copy, Download, FileText, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { standardizeText, handleStandardizeInput } from "@/lib/validations";
+import { standardizeText, handleStandardizeInput, formatCurrencyInput, parseCurrency, normalizeConstraintValue } from "@/lib/validations";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { ScrollIndicator } from "@/components/ui/ScrollIndicator";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 export default function Receitas() {
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isReuseDialogOpen, setIsReuseDialogOpen] = useState(false);
@@ -66,7 +68,11 @@ export default function Receitas() {
       if (error) throw error;
       return data;
     },
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   // Buscar despesas para calcular o saldo
@@ -79,7 +85,11 @@ export default function Receitas() {
       if (error) throw error;
       return data;
     },
-    staleTime: 30000, // Cache por 30 segundos
+    staleTime: 300000, // Cache por 5 minutos
+    refetchOnMount: true, // Buscar na montagem inicial
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 600000, // 10 minutos
   });
 
   const { searchTerm, setSearchTerm, filteredData: filteredRevenues, resultCount, totalCount } = useSmartSearch(
@@ -119,17 +129,51 @@ export default function Receitas() {
     }
   }, [novoParam, categoriaFilter, linkedSourceParam, searchParams, setSearchParams]);
 
-  // Aplicar filtro adicional por categoria se especificado na URL
+  // Aplicar filtro adicional por categoria e linked_source se especificado na URL
   const finalFilteredRevenues = useMemo(() => {
     if (!filteredRevenues) return [];
-    if (!categoriaFilter) return filteredRevenues;
+    let result = filteredRevenues;
     
-    // Filtrar por categoria (case-insensitive)
-    return filteredRevenues.filter((revenue: any) => {
+    // Filtrar por categoria se especificado
+    if (categoriaFilter) {
+      result = result.filter((revenue: any) => {
       const category = (revenue.category || "").toLowerCase();
       return category.includes(categoriaFilter.toLowerCase());
     });
-  }, [filteredRevenues, categoriaFilter]);
+    }
+    
+    // Filtrar por linked_source se especificado
+    if (linkedSourceParam) {
+      result = result.filter((revenue: any) => {
+        const linkedSource = (revenue.linked_source || "").toLowerCase();
+        const isLinkedSourceMatch = linkedSource.includes(linkedSourceParam.toLowerCase());
+        
+        // Se for "Imóveis", filtrar também por property_id ou categorias relacionadas
+        if (linkedSourceParam.toLowerCase() === "imóveis" || linkedSourceParam.toLowerCase() === "imoveis") {
+          const hasPropertyId = !!revenue.property_id;
+          const category = (revenue.category || "").toLowerCase();
+          const description = (revenue.description || "").toLowerCase();
+          
+          // Categorias relacionadas a imóveis
+          const propertyRelatedCategories = [
+            "aluguel", "arrendamento", "locação", "locacao", "rent", "rental",
+            "condomínio", "condominio", "iptu", "taxa", "manutenção", "manutencao",
+            "reforma", "reparo", "seguro", "segurança", "seguranca"
+          ];
+          
+          const isPropertyCategory = propertyRelatedCategories.some(cat => 
+            category.includes(cat) || description.includes(cat)
+          );
+          
+          return (isLinkedSourceMatch || hasPropertyId || isPropertyCategory);
+        }
+        
+        return isLinkedSourceMatch;
+      });
+    }
+    
+    return result;
+  }, [filteredRevenues, categoriaFilter, linkedSourceParam]);
 
   // Busca para reutilizar receitas
   const { filteredData: filteredReuseRevenues } = useSmartSearch(
@@ -354,7 +398,7 @@ export default function Receitas() {
         installments: frequencyType === "tempo_determinado" && formData.installments 
           ? parseInt(formData.installments) 
           : null,
-        documentation_status: formData.documentation_status || "PENDENTE",
+        documentation_status: normalizeConstraintValue("documentation_status", formData.documentation_status) || "PENDENTE",
         linked_source: formData.linked_source ? standardizeText(formData.linked_source) : null,
       };
 
@@ -870,20 +914,27 @@ export default function Receitas() {
         )}
       </div>
 
-      <div className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-x-auto">
-        <Table className="w-full border-separate border-spacing-0 min-w-[1200px]">
+      <div ref={tableContainerRef} className="bg-card rounded-2xl shadow-elegant-lg border border-border/50 overflow-x-auto relative">
+        <ScrollIndicator scrollContainerRef={tableContainerRef} direction="both" />
+        <Table className="w-full border-separate border-spacing-0 min-w-[800px] sm:min-w-[1000px] md:min-w-[1200px]">
           <TableHeader>
             <TableRow className="border-b-2 border-primary/30 hover:bg-transparent">
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl px-1.5 sm:px-2 text-xs text-center">Data</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Descrição</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Classificação</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Categoria</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Cliente</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Imóvel</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Periodicidade</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Status Doc.</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Valor</TableHead>
-              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs w-16 text-center">Ações</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 rounded-tl-xl text-xs text-center whitespace-nowrap">Data</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Descrição</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
+                <span className="hidden sm:inline">Classificação</span>
+                <span className="sm:hidden">Classif.</span>
+              </TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Categoria</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Cliente</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Imóvel</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">
+                <span className="hidden sm:inline">Periodicidade</span>
+                <span className="sm:hidden">Período</span>
+              </TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Status Doc.</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs text-center whitespace-nowrap">Valor</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 text-xs w-16 text-center whitespace-nowrap">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -911,27 +962,27 @@ export default function Receitas() {
                       return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
                     })() : "-"}
                   </TableCell>
-                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] text-center">
-                    <div className="flex items-center justify-center gap-1 flex-wrap">
-                      <span className="truncate">{revenue.description}</span>
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 text-xs text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-center">{revenue.description || "-"}</span>
                       {revenue.linked_source && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/30">
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/30 whitespace-nowrap">
                           🎯 {revenue.linked_source}
                         </Badge>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="border-r border-border/30 px-1.5 sm:px-2 text-xs text-center">
+                  <TableCell className="border-r border-border/30 text-xs text-center">
                     {revenue.classification ? (
-                      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary whitespace-nowrap">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary inline-block">
                         {revenue.classification}
                       </span>
                     ) : "-"}
                   </TableCell>
-                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{revenue.category || "-"}</TableCell>
-                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[100px] truncate text-center">{revenue.clients?.name || "-"}</TableCell>
-                  <TableCell className="font-medium text-foreground max-w-[120px] truncate border-r border-border/30 px-1.5 sm:px-2 text-xs text-center">{revenue.properties?.address || "-"}</TableCell>
-                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[150px] truncate text-center">{revenue.frequency || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center">{revenue.category || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center">{revenue.clients?.name || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center">{revenue.properties?.address || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 text-xs text-center">{revenue.frequency || "-"}</TableCell>
                   <TableCell className="border-r border-border/30 px-1.5 sm:px-2 text-xs text-center">
                     <span className={`px-1.5 py-0.5 rounded text-xs font-semibold shadow-sm whitespace-nowrap ${
                       revenue.documentation_status === "PAGO" 
@@ -1293,17 +1344,17 @@ export default function Receitas() {
               <div className="space-y-3">
                 <h3 className="font-bold text-lg text-foreground">Receitas que compõem o total ({financialStats.revenuesThisYear.length}):</h3>
                 <div className="max-h-[400px] overflow-y-auto border border-border/30 rounded-lg">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
+            <Table>
+              <TableHeader>
+                <TableRow>
                         <TableHead>Data</TableHead>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead>Categoria</TableHead>
-                        <TableHead>Classificação</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Classificação</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                       {financialStats.revenuesThisYear.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
@@ -1312,25 +1363,25 @@ export default function Receitas() {
                         </TableRow>
                       ) : (
                         financialStats.revenuesThisYear.map((revenue: any) => (
-                          <TableRow key={revenue.id}>
+                  <TableRow key={revenue.id}>
                             <TableCell className="text-xs">
                               {revenue.date ? (() => {
                                 const date = new Date(revenue.date);
                                 return isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
                               })() : "-"}
-                            </TableCell>
+                    </TableCell>
                             <TableCell className="font-medium text-xs max-w-[200px] truncate">{revenue.description || "-"}</TableCell>
                             <TableCell className="text-xs">{revenue.category || "-"}</TableCell>
                             <TableCell className="text-xs">{revenue.classification || "-"}</TableCell>
                             <TableCell className="text-right font-bold text-success text-xs">
                               {formatCurrency(revenue.amount || 0)}
                             </TableCell>
-                          </TableRow>
+                  </TableRow>
                         ))
                       )}
-                    </TableBody>
-                  </Table>
-                </div>
+              </TableBody>
+            </Table>
+          </div>
               </div>
             </div>
           ) : (

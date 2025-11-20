@@ -52,7 +52,7 @@ export default function Anotacoes() {
         return a.completed ? 1 : -1;
       }
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
+  });
   }, [notes]);
 
   const [keepDialogOpen, setKeepDialogOpen] = useState(false);
@@ -286,7 +286,7 @@ export default function Anotacoes() {
   }, []);
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <PageHeader
         title="Anotações"
         description="Organize suas ideias e informações"
@@ -388,7 +388,7 @@ export default function Anotacoes() {
             </CardContent>
           </Card>
         ))}
-        </div>
+      </div>
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {

@@ -379,7 +379,7 @@ const calculateStats = (applications: any[]) => {
   const hasAnalytics = applications.length > 0;
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-x-hidden">
       <PageHeader
         title="Aplicações"
         description="Gerencie todos os investimentos e aplicações financeiras"
