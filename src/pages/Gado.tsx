@@ -41,10 +41,10 @@ export default function Gado() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Preço do @ (arroba) - padrão R$ 305,00, pode ser alterado
+  // Preço do @ (arroba) - padrão R$ 310,00, pode ser alterado
   const [arrobaPrice, setArrobaPrice] = useState<number>(() => {
     const saved = localStorage.getItem('cattle_arroba_price');
-    return saved ? parseFloat(saved) : 305;
+    return saved ? parseFloat(saved) : 310;
   });
 
   const [formData, setFormData] = useState({
