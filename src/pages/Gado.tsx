@@ -401,7 +401,7 @@ export default function Gado() {
             <Button
               variant="ghost"
               className="w-full h-auto p-0 flex flex-col items-start gap-3 hover:bg-transparent"
-              onClick={() => navigate("/despesas?categoria=Gado&busca=gado")}
+              onClick={() => navigate("/despesas?novo=1&categoria=Gado")}
             >
               <div className="flex items-center gap-3 w-full">
                 <div className="p-3 rounded-lg bg-destructive/10">
@@ -410,7 +410,7 @@ export default function Gado() {
                 <div className="flex-1 text-left">
                   <h3 className="font-bold text-lg text-foreground">Custos com os Gados</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Visualize todas as despesas relacionadas ao gado
+                    Cadastrar nova despesa relacionada ao gado
                   </p>
                 </div>
               </div>
@@ -423,7 +423,7 @@ export default function Gado() {
             <Button
               variant="ghost"
               className="w-full h-auto p-0 flex flex-col items-start gap-3 hover:bg-transparent"
-              onClick={() => navigate("/receitas?categoria=Gado&busca=gado")}
+              onClick={() => navigate("/receitas?novo=1&categoria=Gado")}
             >
               <div className="flex items-center gap-3 w-full">
                 <div className="p-3 rounded-lg bg-success/10">
@@ -432,7 +432,7 @@ export default function Gado() {
                 <div className="flex-1 text-left">
                   <h3 className="font-bold text-lg text-foreground">Receitas com os Gados</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Visualize todas as receitas relacionadas ao gado
+                    Cadastrar nova receita relacionada ao gado
                   </p>
                 </div>
               </div>

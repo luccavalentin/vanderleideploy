@@ -37,6 +37,7 @@ export default function Despesas() {
   // Ler parâmetros da URL para filtros
   const categoriaFilter = searchParams.get("categoria") || "";
   const buscaFilter = searchParams.get("busca") || "";
+  const novoParam = searchParams.get("novo") || "";
 
   const [formData, setFormData] = useState({
     description: "",
@@ -72,6 +73,28 @@ export default function Despesas() {
       setSearchTerm(filterTerm);
     }
   }, [categoriaFilter, buscaFilter, setSearchTerm]);
+
+  // Abrir dialog de novo cadastro se parâmetro novo=1 estiver na URL
+  useEffect(() => {
+    if (novoParam === "1") {
+      setEditingId(null);
+      setFormData({
+        description: "",
+        amount: "",
+        date: "",
+        category: categoriaFilter || "", // Pré-preenche categoria se especificada
+        frequency: "",
+        frequency_type: "",
+        installments: "",
+        status: "PENDENTE",
+      });
+      setIsDialogOpen(true);
+      // Remove o parâmetro da URL para não abrir novamente ao recarregar
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete("novo");
+      setSearchParams(newSearchParams, { replace: true });
+    }
+  }, [novoParam, categoriaFilter, searchParams, setSearchParams]);
 
   // Aplicar filtro adicional por categoria se especificado na URL
   const finalFilteredExpenses = useMemo(() => {
