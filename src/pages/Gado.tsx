@@ -38,8 +38,15 @@ export default function Gado() {
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
+  const [priceConfigDialogOpen, setPriceConfigDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Preço do @ (arroba) - padrão R$ 347.000,00, pode ser alterado
+  const [arrobaPrice, setArrobaPrice] = useState<number>(() => {
+    const saved = localStorage.getItem('cattle_arroba_price');
+    return saved ? parseFloat(saved) : 347000;
+  });
 
   const [formData, setFormData] = useState({
     description: "",
@@ -316,13 +323,23 @@ export default function Gado() {
   };
 
   const handleSubmitLogic = async () => {
-    // Calcular valor baseado no peso se fornecido (@ = R$ 347.000,00)
-    // 1 @ = 15 kg, então: valor = (peso_kg / 15) * 347000
+    // Validação: peso é obrigatório
+    if (!formData.weight || !formData.weight.trim() || parseFloat(formData.weight) <= 0) {
+      toast({
+        title: "Erro de validação",
+        description: "O peso é obrigatório e deve ser maior que zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Calcular valor baseado no peso se fornecido
+    // 1 @ = 15 kg, então: valor = (peso_kg / 15) * arrobaPrice
     let calculatedPrice = formData.purchase_price ? parseFloat(formData.purchase_price) : null;
     if (formData.weight && parseFloat(formData.weight) > 0) {
       const weightKg = parseFloat(formData.weight);
       const arrobas = weightKg / 15; // 1 @ = 15 kg
-      calculatedPrice = arrobas * 347000;
+      calculatedPrice = arrobas * arrobaPrice;
     }
     
     const data = {
@@ -396,6 +413,15 @@ export default function Gado() {
     setIsDialogOpen(true);
   };
 
+  const handleSaveArrobaPrice = () => {
+    localStorage.setItem('cattle_arroba_price', arrobaPrice.toString());
+    toast({
+      title: "Preço do @ atualizado",
+      description: `Novo preço: ${formatCurrency(arrobaPrice)} por @`,
+    });
+    setPriceConfigDialogOpen(false);
+  };
+
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       <PageHeader
@@ -406,6 +432,18 @@ export default function Gado() {
           onClick: handleNewItem,
         }}
       />
+
+      {/* Botão para configurar preço do @ */}
+      <div className="mb-4 flex justify-end">
+        <Button
+          variant="outline"
+          onClick={() => setPriceConfigDialogOpen(true)}
+          className="gap-2"
+        >
+          <DollarSign className="w-4 h-4" />
+          Configurar Preço do @
+        </Button>
+      </div>
 
       <QuickActions />
 
@@ -894,20 +932,21 @@ export default function Gado() {
                   value={formData.weight}
                   onChange={(e) => {
                     const weight = e.target.value;
-                    // Calcular valor automaticamente: @ = R$ 347.000,00 (1 @ = 15 kg)
+                    // Calcular valor automaticamente: 1 @ = 15 kg
                     if (weight && parseFloat(weight) > 0) {
                       const weightKg = parseFloat(weight);
                       const arrobas = weightKg / 15;
-                      const calculatedPrice = arrobas * 347000;
+                      const calculatedPrice = arrobas * arrobaPrice;
                       setFormData({ ...formData, weight, purchase_price: calculatedPrice.toFixed(2) });
                     } else {
                       setFormData({ ...formData, weight });
                     }
                   }}
                   placeholder="Ex: 450 (kg)"
+                  required
                 />
                 <p className="text-xs text-muted-foreground">
-                  O valor será calculado automaticamente: 1 @ = 15 kg = R$ 347.000,00
+                  O valor será calculado automaticamente: 1 @ = 15 kg = {formatCurrency(arrobaPrice)}
                 </p>
               </div>
             </div>
@@ -940,6 +979,45 @@ export default function Gado() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para configurar preço do @ */}
+      <Dialog open={priceConfigDialogOpen} onOpenChange={setPriceConfigDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Configurar Preço do @ (Arroba)</DialogTitle>
+            <DialogDescription>
+              Defina o preço por @ (arroba) para cálculo automático do valor do gado. 1 @ = 15 kg
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="arroba_price">Preço por @ (R$)</Label>
+              <Input
+                id="arroba_price"
+                type="number"
+                step="1000"
+                value={arrobaPrice}
+                onChange={(e) => setArrobaPrice(parseFloat(e.target.value) || 347000)}
+                placeholder="347000"
+              />
+              <p className="text-xs text-muted-foreground">
+                Preço atual: {formatCurrency(arrobaPrice)} por @
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Exemplo: Gado de 450 kg = 30 @ × {formatCurrency(arrobaPrice)} = {formatCurrency((450 / 15) * arrobaPrice)}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setPriceConfigDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSaveArrobaPrice}>
+                Salvar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
