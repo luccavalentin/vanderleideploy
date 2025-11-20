@@ -229,6 +229,16 @@ export default function Receitas() {
     
   const handleSubmitLogic = async () => {
     try {
+      // Validação: descrição é obrigatória
+      if (!formData.description || !formData.description.trim()) {
+        toast({
+          title: "Erro de validação",
+          description: "A descrição é obrigatória.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       // Limpar campos vazios e converter para null
       // Construir a frequency completa baseada no tipo
       // Se não selecionar nada, considerar "Anual Fixo"
@@ -824,12 +834,14 @@ export default function Receitas() {
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
               <div className="space-y-2">
-                <Label htmlFor="description">Descrição</Label>
+                <Label htmlFor="description">Descrição *</Label>
                 <Input
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   onBlur={(e) => handleStandardizeInput(e.target.value, (value) => setFormData({ ...formData, description: value }))}
+                  placeholder="Ex: Recebimento de aluguel do imóvel X"
+                  required
                 />
               </div>
               <div className="space-y-2">
