@@ -723,7 +723,7 @@ export default function Gado() {
               return (
                 <div className="space-y-4">
                   {itemsToShow.map((item: any) => (
-                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-1">
+                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-3">
                       <div className="font-semibold">{item.description || "Sem descrição"}</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div><b>Categoria:</b> {item.category || "-"}</div>
@@ -735,6 +735,20 @@ export default function Gado() {
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
                         <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDetailsDialogOpen(false);
+                            handleEdit(item);
+                          }}
+                          className="gap-2"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Editar
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -748,7 +762,7 @@ export default function Gado() {
               return (
                 <div className="space-y-4">
                   {femeas.map((item: any) => (
-                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-1">
+                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-3">
                       <div className="font-semibold">{item.description || "Sem descrição"}</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div><b>Categoria:</b> {item.category || "-"}</div>
@@ -760,6 +774,20 @@ export default function Gado() {
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
                         <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDetailsDialogOpen(false);
+                            handleEdit(item);
+                          }}
+                          className="gap-2"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Editar
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -773,7 +801,7 @@ export default function Gado() {
               return (
                 <div className="space-y-4">
                   {machos.map((item: any) => (
-                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-1">
+                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-3">
                       <div className="font-semibold">{item.description || "Sem descrição"}</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div><b>Categoria:</b> {item.category || "-"}</div>
@@ -786,6 +814,20 @@ export default function Gado() {
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
                         <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
                       </div>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDetailsDialogOpen(false);
+                            handleEdit(item);
+                          }}
+                          className="gap-2"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Editar
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -796,17 +838,32 @@ export default function Gado() {
             const item = sortedCattle?.find((c) => c.id === selectedStat);
             if (!item) return <div className="text-muted-foreground">Lote não encontrado.</div>;
             return (
-              <div className="space-y-2">
-                <div><b>Descrição:</b> {item.description || "-"}</div>
-                <div><b>Categoria:</b> {item.category || "-"}</div>
-                <div><b>Origem:</b> {item.origin || "-"}</div>
-                <div><b>Quantidade:</b> {item.quantity || "-"}</div>
-                <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
-                <div><b>Peso:</b> {item.weight ? `${item.weight} kg (${(parseFloat(item.weight) / 15).toFixed(2)} @)` : "-"}</div>
-                <div><b>Saúde:</b> {item.health_status || "-"}</div>
-                <div><b>Localização:</b> {item.location || "-"}</div>
-                <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
-                <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div><b>Descrição:</b> {item.description || "-"}</div>
+                  <div><b>Categoria:</b> {item.category || "-"}</div>
+                  <div><b>Origem:</b> {item.origin || "-"}</div>
+                  <div><b>Quantidade:</b> {item.quantity || "-"}</div>
+                  <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                  <div><b>Peso:</b> {item.weight ? `${item.weight} kg (${(parseFloat(item.weight) / 15).toFixed(2)} @)` : "-"}</div>
+                  <div><b>Saúde:</b> {item.health_status || "-"}</div>
+                  <div><b>Localização:</b> {item.location || "-"}</div>
+                  <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
+                  <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                </div>
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDetailsDialogOpen(false);
+                      handleEdit(item);
+                    }}
+                    className="gap-2"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Editar
+                  </Button>
+                </div>
               </div>
             );
           })()}
