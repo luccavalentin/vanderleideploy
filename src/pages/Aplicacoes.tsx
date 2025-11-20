@@ -429,78 +429,214 @@ const calculateStats = (applications: any[]) => {
       </div>
 
       {hasAnalytics && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-8">
           {/* Gráfico: Investimento por Tipo */}
-          <Card className="shadow-elegant border-0">
-            <CardHeader>
-              <CardTitle className="text-base font-bold">Investimento por Tipo</CardTitle>
+          <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2">
+                <PieChartIcon className="w-4 h-4 text-primary" />
+                Investimento por Tipo
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
+            <CardContent className="pt-0">
+              <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
-                  <Pie data={investmentByType} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
+                  <Pie 
+                    data={investmentByType} 
+                    dataKey="value" 
+                    nameKey="name" 
+                    cx="50%" 
+                    cy="50%" 
+                    outerRadius={80} 
+                    labelLine={false}
+                    label={({ name, percent }) => {
+                      if (percent < 0.05) return '';
+                      return `${name}: ${(percent * 100).toFixed(0)}%`;
+                    }}
+                  >
                     {investmentByType.map((entry, idx) => (
                       <Cell key={`cell-${idx}`} fill={chartColors[idx % chartColors.length]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip formatter={formatCurrency} />
+                  <RechartsTooltip 
+                    formatter={(value: any) => formatCurrency(value)}
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--popover))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '0.5rem',
+                      padding: '8px 12px',
+                    }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '10px' }}
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value) => <span style={{ fontSize: '11px' }}>{value}</span>}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           {/* Gráfico: Distribuição por Status */}
-          <Card className="shadow-elegant border-0">
-            <CardHeader>
-              <CardTitle className="text-base font-bold">Distribuição por Status</CardTitle>
+          <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2">
+                <PieChartIcon className="w-4 h-4 text-primary" />
+                Distribuição por Status
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
+            <CardContent className="pt-0">
+              <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
-                  <Pie data={statusDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
+                  <Pie 
+                    data={statusDistribution} 
+                    dataKey="value" 
+                    nameKey="name" 
+                    cx="50%" 
+                    cy="50%" 
+                    outerRadius={80} 
+                    labelLine={false}
+                    label={({ name, percent }) => {
+                      if (percent < 0.05) return '';
+                      return `${name}: ${(percent * 100).toFixed(0)}%`;
+                    }}
+                  >
                     {statusDistribution.map((entry, idx) => (
                       <Cell key={`cell-${idx}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <RechartsTooltip />
+                  <RechartsTooltip 
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--popover))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '0.5rem',
+                      padding: '8px 12px',
+                    }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '10px' }}
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value) => <span style={{ fontSize: '11px' }}>{value}</span>}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           {/* Gráfico: Comparativo por Instituição */}
-          <Card className="shadow-elegant border-0">
-            <CardHeader>
-              <CardTitle className="text-base font-bold">Comparativo por Instituição</CardTitle>
+          <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" />
+                Comparativo por Instituição
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={institutionComparison}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" fontSize={12} />
-                  <YAxis fontSize={12} tickFormatter={formatCurrency} />
-                  <RechartsTooltip formatter={formatCurrency} />
-                  <Bar dataKey="value" fill="#2563eb" radius={[8,8,0,0]} />
+            <CardContent className="pt-0">
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart 
+                  data={institutionComparison}
+                  margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                  <XAxis 
+                    dataKey="name" 
+                    fontSize={11}
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    tickLine={false}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={70}
+                  />
+                  <YAxis 
+                    fontSize={11}
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                    tickLine={false}
+                    axisLine={false}
+                    width={60}
+                  />
+                  <RechartsTooltip 
+                    formatter={(value: any) => formatCurrency(value)}
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--popover))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '0.5rem',
+                      padding: '8px 12px',
+                    }}
+                    cursor={{ fill: 'hsl(var(--primary) / 0.1)' }}
+                  />
+                  <Bar 
+                    dataKey="value" 
+                    fill="hsl(var(--primary))" 
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={60}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           {/* Gráfico: Próximos Vencimentos */}
-          <Card className="shadow-elegant border-0">
-            <CardHeader>
-              <CardTitle className="text-base font-bold">Próximos Vencimentos</CardTitle>
+          <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-primary" />
+                Próximos Vencimentos
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={maturityTimeline}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" fontSize={12} />
-                  <YAxis fontSize={12} tickFormatter={formatCurrency} />
-                  <RechartsTooltip formatter={formatCurrency} />
-                  <Line type="monotone" dataKey="value" stroke="#16a34a" strokeWidth={3} dot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
+            <CardContent className="pt-0">
+              {maturityTimeline && maturityTimeline.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart 
+                    data={maturityTimeline}
+                    margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                    <XAxis 
+                      dataKey="label" 
+                      fontSize={11}
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      tickLine={false}
+                      axisLine={{ stroke: 'hsl(var(--border))' }}
+                    />
+                    <YAxis 
+                      fontSize={11}
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                      tickLine={false}
+                      axisLine={false}
+                      width={60}
+                    />
+                    <RechartsTooltip 
+                      formatter={(value: any) => formatCurrency(value)}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '0.5rem',
+                        padding: '8px 12px',
+                      }}
+                      cursor={{ stroke: 'hsl(var(--success))', strokeWidth: 1 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="hsl(var(--success))" 
+                      strokeWidth={2.5} 
+                      dot={{ r: 5, fill: 'hsl(var(--success))' }}
+                      activeDot={{ r: 7 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-[280px] text-center">
+                  <CalendarClock className="w-12 h-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground font-medium">Nenhum vencimento próximo</p>
+                  <p className="text-xs text-muted-foreground mt-1">Os próximos vencimentos aparecerão aqui</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
