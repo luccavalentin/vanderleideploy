@@ -3706,43 +3706,63 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent className="overflow-visible">
           <div ref={monthlyAnalysisChartRef} className="w-full overflow-visible">
-            <ResponsiveContainer width="100%" height={250} className="min-h-[250px]">
-              <BarChart data={monthlyAnalysisData || []} barCategoryGap="25%" margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+            <ResponsiveContainer width="100%" height={400} className="min-h-[400px]">
+              <BarChart 
+                data={monthlyAnalysisData || []} 
+                barCategoryGap="15%" 
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" vertical={false} />
               <XAxis 
                 dataKey="month" 
                 className="text-xs"
-                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: 'hsl(var(--border))' }}
+                angle={-45}
+                textAnchor="end"
+                height={80}
               />
               <YAxis 
                 className="text-xs"
-                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                 tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
                 tickLine={false}
-                axisLine={false}
-                width={60}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+                width={70}
               />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: 'hsl(var(--popover))', 
                   border: '1px solid hsl(var(--border))',
                   borderRadius: '0.75rem',
-                  padding: '10px 12px',
+                  padding: '12px 14px',
                   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
                 }}
                 formatter={(value: any) => formatCurrency(value)}
+                labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
                 cursor={{ fill: 'hsl(var(--muted))', opacity: 0.1 }}
               />
               <Legend 
-                wrapperStyle={{ paddingTop: '15px' }}
+                wrapperStyle={{ paddingTop: '20px' }}
                 iconType="circle"
-                iconSize={8}
-                formatter={(value) => <span style={{ fontSize: '12px' }}>{value}</span>}
+                iconSize={10}
+                formatter={(value) => <span style={{ fontSize: '13px', fontWeight: '500' }}>{value}</span>}
               />
-              <Bar dataKey="receitas" fill="hsl(var(--success))" name="Receitas" radius={[6, 6, 0, 0]} barSize={30} />
-              <Bar dataKey="despesas" fill="hsl(var(--destructive))" name="Despesas" radius={[6, 6, 0, 0]} barSize={30} />
+              <Bar 
+                dataKey="receitas" 
+                fill="hsl(var(--success))" 
+                name="Receitas" 
+                radius={[8, 8, 0, 0]} 
+                barSize={40}
+              />
+              <Bar 
+                dataKey="despesas" 
+                fill="hsl(var(--destructive))" 
+                name="Despesas" 
+                radius={[8, 8, 0, 0]} 
+                barSize={40}
+              />
             </BarChart>
           </ResponsiveContainer>
             </div>
