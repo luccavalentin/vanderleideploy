@@ -39,3 +39,4 @@ export const TableSkeleton = ({ rows = 5 }: { rows?: number }) => (
   </div>
 );
 
+

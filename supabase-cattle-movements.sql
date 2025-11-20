@@ -79,3 +79,4 @@ COMMENT ON COLUMN cattle_movements.generate_revenue IS 'Se true, gera receita au
 COMMENT ON COLUMN cattle_movements.generate_expense IS 'Se true, gera despesa automaticamente vinculada';
 
 
+

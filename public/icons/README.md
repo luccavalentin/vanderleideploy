@@ -33,3 +33,4 @@ node scripts/generate-icons.js
 - Qualidade: Alta resolução
 
 
+

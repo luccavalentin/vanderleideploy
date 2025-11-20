@@ -85,3 +85,4 @@
 4. **Critical CSS**: Inline CSS crítico
 5. **HTTP/2 Server Push**: Push de recursos críticos
 
+

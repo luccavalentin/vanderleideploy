@@ -242,3 +242,4 @@ Após gerar os ícones:
 - Botão voltar usa `navigate(-1)` ou vai para dashboard
 
 
+

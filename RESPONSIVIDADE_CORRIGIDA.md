@@ -138,3 +138,4 @@ O sistema agora se adapta **automaticamente** a qualquer tamanho de tela, manten
 O sistema agora está **100% responsivo** e se adapta automaticamente a qualquer tamanho de tela! 🎉
 
 
+

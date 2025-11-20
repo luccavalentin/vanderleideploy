@@ -68,3 +68,4 @@ O sistema utiliza **Supabase** como banco de dados.
 - **Revise os scripts antes de executar**
 
 
+

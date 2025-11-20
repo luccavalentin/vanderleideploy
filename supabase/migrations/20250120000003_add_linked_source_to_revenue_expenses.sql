@@ -13,3 +13,4 @@ ADD COLUMN IF NOT EXISTS linked_source TEXT;
 
 COMMENT ON COLUMN public.expenses.linked_source IS 'Indica de qual módulo/tela a despesa foi criada (ex: Escritório, Gado, Imóveis, etc). Usado para rastreabilidade e indicadores visuais.';
 
+
