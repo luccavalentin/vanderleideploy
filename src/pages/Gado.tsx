@@ -645,27 +645,111 @@ export default function Gado() {
 
       {/* Dialog de detalhes do lote de gado - renderizado fora do Table */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Detalhes do Lote</DialogTitle>
-                    </DialogHeader>
-                    {selectedStat && (() => {
-                      const item = sortedCattle?.find((c) => c.id === selectedStat);
-                      if (!item) return <div className="text-muted-foreground">Lote não encontrado.</div>;
-                      return (
-                        <div className="space-y-2">
-                          <div><b>Categoria:</b> {item.category}</div>
-                          <div><b>Origem:</b> {item.origin}</div>
-                          <div><b>Quantidade:</b> {item.quantity}</div>
-                          <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
-                          <div><b>Saúde:</b> {item.health_status}</div>
-                          <div><b>Localização:</b> {item.location || "-"}</div>
-                          <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
-                          <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
-                        </div>
-                      );
-                    })()}
-                  </DialogContent>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedStat === "total" ? "Todos os Registros de Gado" :
+               selectedStat === "femeas" ? "Fêmeas" :
+               selectedStat === "machos" ? "Machos" :
+               selectedStat === "quantity" ? "Todos os Registros (Quantidade)" :
+               selectedStat === "value" ? "Todos os Registros (Valor)" :
+               "Detalhes do Lote"}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedStat && (() => {
+            // Se for um filtro (total, femeas, machos, etc), mostrar lista de registros
+            if (selectedStat === "total" || selectedStat === "quantity" || selectedStat === "value") {
+              const itemsToShow = sortedCattle || [];
+              if (itemsToShow.length === 0) {
+                return <div className="text-muted-foreground">Nenhum lote de gado cadastrado.</div>;
+              }
+              return (
+                <div className="space-y-4">
+                  {itemsToShow.map((item: any) => (
+                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-1">
+                      <div className="font-semibold">{item.description || "Sem descrição"}</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><b>Categoria:</b> {item.category || "-"}</div>
+                        <div><b>Origem:</b> {item.origin || "-"}</div>
+                        <div><b>Quantidade:</b> {item.quantity || "-"}</div>
+                        <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                        <div><b>Saúde:</b> {item.health_status || "-"}</div>
+                        <div><b>Localização:</b> {item.location || "-"}</div>
+                        <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            } else if (selectedStat === "femeas") {
+              const femeas = (sortedCattle || []).filter((c: any) => c.category === "Fêmea" || c.category === "Bezerra" || c.category === "Novilha");
+              if (femeas.length === 0) {
+                return <div className="text-muted-foreground">Nenhuma fêmea cadastrada.</div>;
+              }
+              return (
+                <div className="space-y-4">
+                  {femeas.map((item: any) => (
+                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-1">
+                      <div className="font-semibold">{item.description || "Sem descrição"}</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><b>Categoria:</b> {item.category || "-"}</div>
+                        <div><b>Origem:</b> {item.origin || "-"}</div>
+                        <div><b>Quantidade:</b> {item.quantity || "-"}</div>
+                        <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                        <div><b>Saúde:</b> {item.health_status || "-"}</div>
+                        <div><b>Localização:</b> {item.location || "-"}</div>
+                        <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            } else if (selectedStat === "machos") {
+              const machos = (sortedCattle || []).filter((c: any) => c.category === "Macho");
+              if (machos.length === 0) {
+                return <div className="text-muted-foreground">Nenhum macho cadastrado.</div>;
+              }
+              return (
+                <div className="space-y-4">
+                  {machos.map((item: any) => (
+                    <div key={item.id} className="border-b border-border/30 pb-3 space-y-1">
+                      <div className="font-semibold">{item.description || "Sem descrição"}</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><b>Categoria:</b> {item.category || "-"}</div>
+                        <div><b>Origem:</b> {item.origin || "-"}</div>
+                        <div><b>Quantidade:</b> {item.quantity || "-"}</div>
+                        <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                        <div><b>Saúde:</b> {item.health_status || "-"}</div>
+                        <div><b>Localização:</b> {item.location || "-"}</div>
+                        <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            
+            // Se for um ID específico, mostrar detalhes de um lote
+            const item = sortedCattle?.find((c) => c.id === selectedStat);
+            if (!item) return <div className="text-muted-foreground">Lote não encontrado.</div>;
+            return (
+              <div className="space-y-2">
+                <div><b>Descrição:</b> {item.description || "-"}</div>
+                <div><b>Categoria:</b> {item.category || "-"}</div>
+                <div><b>Origem:</b> {item.origin || "-"}</div>
+                <div><b>Quantidade:</b> {item.quantity || "-"}</div>
+                <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                <div><b>Saúde:</b> {item.health_status || "-"}</div>
+                <div><b>Localização:</b> {item.location || "-"}</div>
+                <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
+                <div><b>Preço Compra:</b> {item.purchase_price ? formatCurrency(item.purchase_price) : "-"}</div>
+              </div>
+            );
+          })()}
+        </DialogContent>
       </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => {

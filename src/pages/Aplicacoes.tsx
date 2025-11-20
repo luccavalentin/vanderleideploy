@@ -390,10 +390,42 @@ const calculateStats = (applications: any[]) => {
 
       {/* DASHBOARD INTERATIVO DE APLICAÇÕES */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        <StatsCard title="Total Investido" value={formatCurrency(stats.totalInvested)} icon={Layers3} />
-        <StatsCard title="Investimentos Ativos" value={String(stats.activeInvestments)} icon={BarChart3} />
-        <StatsCard title="Rentabilidade Média (%)" value={String(stats.avgRate.toFixed(2))} icon={PieChartIcon} />
-        <StatsCard title="Valor Resgatado" value={formatCurrency(stats.redeemedValue)} icon={Landmark} />
+        <StatsCard 
+          title="Total Investido" 
+          value={formatCurrency(stats.totalInvested)} 
+          icon={Layers3}
+          onClick={() => {
+            setSelectedApplication("all");
+            setDetailsDialogOpen(true);
+          }}
+        />
+        <StatsCard 
+          title="Investimentos Ativos" 
+          value={String(stats.activeInvestments)} 
+          icon={BarChart3}
+          onClick={() => {
+            setSelectedApplication("active");
+            setDetailsDialogOpen(true);
+          }}
+        />
+        <StatsCard 
+          title="Rentabilidade Média (%)" 
+          value={String(stats.avgRate.toFixed(2))} 
+          icon={PieChartIcon}
+          onClick={() => {
+            setSelectedApplication("all");
+            setDetailsDialogOpen(true);
+          }}
+        />
+        <StatsCard 
+          title="Valor Resgatado" 
+          value={formatCurrency(stats.redeemedValue)} 
+          icon={Landmark}
+          onClick={() => {
+            setSelectedApplication("redeemed");
+            setDetailsDialogOpen(true);
+          }}
+        />
       </div>
 
       {hasAnalytics && (
@@ -611,11 +643,92 @@ const calculateStats = (applications: any[]) => {
 
       {/* Dialog de detalhes da aplicação - movido para fora do map */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes da Aplicação</DialogTitle>
+            <DialogTitle>
+              {selectedApplication === "all" ? "Todas as Aplicações" :
+               selectedApplication === "active" ? "Investimentos Ativos" :
+               selectedApplication === "redeemed" ? "Aplicações Resgatadas" :
+               "Detalhes da Aplicação"}
+            </DialogTitle>
           </DialogHeader>
           {selectedApplication && (() => {
+            // Se for um filtro (all, active, redeemed), mostrar lista de aplicações
+            if (selectedApplication === "all") {
+              const appsToShow = sortedApplications || [];
+              if (appsToShow.length === 0) {
+                return <div className="text-muted-foreground">Nenhuma aplicação cadastrada.</div>;
+              }
+              return (
+                <div className="space-y-4">
+                  {appsToShow.map((application: any) => (
+                    <div key={application.id} className="border-b border-border/30 pb-3 space-y-1">
+                      <div className="font-semibold">{application.description}</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><b>Tipo:</b> {application.type || "-"}</div>
+                        <div><b>Instituição:</b> {application.institution || "-"}</div>
+                        <div><b>Data Aplicação:</b> {application.application_date ? format(new Date(application.application_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Vencimento:</b> {application.maturity_date ? format(new Date(application.maturity_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Taxa (%):</b> {application.interest_rate ? `${application.interest_rate}%` : "-"}</div>
+                        <div><b>Status:</b> {application.status || "-"}</div>
+                        <div className="col-span-2"><b>Valor:</b> {application.amount ? formatCurrency(application.amount) : "-"}</div>
+                        {application.notes && <div className="col-span-2"><b>Notas:</b> {application.notes}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            } else if (selectedApplication === "active") {
+              const activeApps = (sortedApplications || []).filter((a: any) => a.status === "Ativa");
+              if (activeApps.length === 0) {
+                return <div className="text-muted-foreground">Nenhum investimento ativo encontrado.</div>;
+              }
+              return (
+                <div className="space-y-4">
+                  {activeApps.map((application: any) => (
+                    <div key={application.id} className="border-b border-border/30 pb-3 space-y-1">
+                      <div className="font-semibold">{application.description}</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><b>Tipo:</b> {application.type || "-"}</div>
+                        <div><b>Instituição:</b> {application.institution || "-"}</div>
+                        <div><b>Data Aplicação:</b> {application.application_date ? format(new Date(application.application_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Vencimento:</b> {application.maturity_date ? format(new Date(application.maturity_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Taxa (%):</b> {application.interest_rate ? `${application.interest_rate}%` : "-"}</div>
+                        <div><b>Status:</b> {application.status || "-"}</div>
+                        <div className="col-span-2"><b>Valor:</b> {application.amount ? formatCurrency(application.amount) : "-"}</div>
+                        {application.notes && <div className="col-span-2"><b>Notas:</b> {application.notes}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            } else if (selectedApplication === "redeemed") {
+              const redeemedApps = (sortedApplications || []).filter((a: any) => a.status === "Resgatada");
+              if (redeemedApps.length === 0) {
+                return <div className="text-muted-foreground">Nenhuma aplicação resgatada encontrada.</div>;
+              }
+              return (
+                <div className="space-y-4">
+                  {redeemedApps.map((application: any) => (
+                    <div key={application.id} className="border-b border-border/30 pb-3 space-y-1">
+                      <div className="font-semibold">{application.description}</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><b>Tipo:</b> {application.type || "-"}</div>
+                        <div><b>Instituição:</b> {application.institution || "-"}</div>
+                        <div><b>Data Aplicação:</b> {application.application_date ? format(new Date(application.application_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Vencimento:</b> {application.maturity_date ? format(new Date(application.maturity_date), "dd/MM/yyyy") : "-"}</div>
+                        <div><b>Taxa (%):</b> {application.interest_rate ? `${application.interest_rate}%` : "-"}</div>
+                        <div><b>Status:</b> {application.status || "-"}</div>
+                        <div className="col-span-2"><b>Valor:</b> {application.amount ? formatCurrency(application.amount) : "-"}</div>
+                        {application.notes && <div className="col-span-2"><b>Notas:</b> {application.notes}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            
+            // Se for um ID específico, mostrar detalhes de uma aplicação
             const application = sortedApplications?.find((a) => a.id === selectedApplication);
             if (!application) return <div className="text-muted-foreground">Aplicação não encontrada.</div>;
             return (

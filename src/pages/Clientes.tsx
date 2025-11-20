@@ -601,6 +601,20 @@ const handleEdit = (client: any) => {
                   </div>
                 </TableCell>
               </TableRow>
+            ) : !clients || clients.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground/70 border-0">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
+                      <Users className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <span className="font-medium">Nenhum cliente cadastrado</span>
+                    <span className="text-sm text-muted-foreground/60">
+                      Cadastre um novo cliente para começar
+                    </span>
+                  </div>
+                </TableCell>
+              </TableRow>
             ) : sortedClients?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-12 text-muted-foreground/70 border-0">
@@ -610,9 +624,7 @@ const handleEdit = (client: any) => {
                     </div>
                     <span className="font-medium">Nenhum cliente encontrado</span>
                     <span className="text-sm text-muted-foreground/60">
-                      {searchTerm || typeFilter !== "all"
-                        ? "Tente ajustar os filtros de busca"
-                        : "Cadastre um novo cliente para começar"}
+                      Tente ajustar os filtros de busca
                     </span>
                   </div>
                 </TableCell>
