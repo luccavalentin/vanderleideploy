@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { QuickActions } from "@/components/QuickActions";
 import { StatsCard } from "@/components/layout/StatsCard";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -116,6 +115,36 @@ export default function Gado() {
       totalQuantity: totalQuantity.toString()
     };
   }, [cattle]);
+
+  // Calculadora de Peso e Valor Total
+  const weightCalculator = useMemo(() => {
+    if (!cattle || cattle.length === 0) {
+      return {
+        totalWeightKg: 0,
+        totalWeightArroba: 0,
+        totalValue: 0
+      };
+    }
+
+    // Soma o peso total: weight * quantity para cada lote
+    const totalWeightKg = cattle.reduce((sum: number, c: any) => {
+      const weight = parseFloat(c.weight || 0);
+      const quantity = parseInt(c.quantity || 1);
+      return sum + (weight * quantity);
+    }, 0);
+
+    // Converte para arroba (1 @ = 15 kg)
+    const totalWeightArroba = totalWeightKg / 15;
+
+    // Calcula o valor total (arroba * preço da arroba)
+    const totalValue = totalWeightArroba * arrobaPrice;
+
+    return {
+      totalWeightKg,
+      totalWeightArroba,
+      totalValue
+    };
+  }, [cattle, arrobaPrice]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -445,7 +474,57 @@ export default function Gado() {
         </Button>
       </div>
 
-      <QuickActions />
+      {/* Calculadora de Peso e Valor Total */}
+      <Card className="mb-6 border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 shadow-elegant-lg">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-foreground mb-2 flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                Calculadora de Gado
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Peso total e valor estimado do rebanho
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-card/50 rounded-lg p-4 border border-border/50">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Peso Total (kg)
+                  </p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {weightCalculator.totalWeightKg.toLocaleString('pt-BR', { 
+                      minimumFractionDigits: 2, 
+                      maximumFractionDigits: 2 
+                    })} kg
+                  </p>
+                </div>
+                <div className="bg-card/50 rounded-lg p-4 border border-border/50">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Peso Total (@)
+                  </p>
+                  <p className="text-2xl font-bold text-primary">
+                    {weightCalculator.totalWeightArroba.toLocaleString('pt-BR', { 
+                      minimumFractionDigits: 2, 
+                      maximumFractionDigits: 2 
+                    })} @
+                  </p>
+                </div>
+                <div className="bg-card/50 rounded-lg p-4 border border-border/50">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Valor Total (R$)
+                  </p>
+                  <p className="text-2xl font-bold text-success">
+                    {formatCurrency(weightCalculator.totalValue)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    @ a {formatCurrency(arrobaPrice)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Botões de Custos e Receitas com Gado */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
