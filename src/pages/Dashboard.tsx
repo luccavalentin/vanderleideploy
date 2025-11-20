@@ -1995,7 +1995,24 @@ export default function Dashboard() {
     },
   });
 
-  const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))'];
+  // Paleta de cores bem distintas para gráficos - evita repetições e tons próximos
+  const COLORS = [
+    '#3B82F6', // Azul vibrante
+    '#10B981', // Verde esmeralda
+    '#F59E0B', // Laranja âmbar
+    '#EF4444', // Vermelho
+    '#8B5CF6', // Roxo
+    '#06B6D4', // Ciano
+    '#F97316', // Laranja escuro
+    '#84CC16', // Verde lima
+    '#EC4899', // Rosa
+    '#14B8A6', // Turquesa
+    '#6366F1', // Índigo
+    '#F43F5E', // Rosa escuro
+    '#0EA5E9', // Azul claro
+    '#22C55E', // Verde claro
+    '#A855F7', // Roxo claro
+  ];
 
   // Funções para abrir dialog de detalhes de categoria
   const handleOpenRevenueDetails = useCallback((category: string) => {
