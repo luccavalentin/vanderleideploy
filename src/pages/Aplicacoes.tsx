@@ -429,7 +429,7 @@ const calculateStats = (applications: any[]) => {
       </div>
 
       {hasAnalytics && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           {/* Gráfico: Investimento por Tipo */}
           <Card className="shadow-elegant border-0">
             <CardHeader>
@@ -789,10 +789,10 @@ const calculateStats = (applications: any[]) => {
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
+                  <SelectContent className="bg-popover z-50 min-w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)]">
                     <SelectItem value="CDB">CDB</SelectItem>
                     <SelectItem value="LCI">LCI</SelectItem>
                     <SelectItem value="LCA">LCA</SelectItem>
