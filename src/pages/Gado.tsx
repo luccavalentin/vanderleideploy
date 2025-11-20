@@ -51,6 +51,7 @@ export default function Gado() {
     location: "",
     purchase_price: "",
     purchase_date: "",
+    weight: "", // Peso em kg
   });
 
   const { data: cattle, isLoading: cattleLoading } = useQuery({
@@ -138,6 +139,7 @@ export default function Gado() {
           location: "",
           purchase_price: "",
           purchase_date: "",
+          weight: "",
         });
         setKeepDialogOpen(false);
       } else {
@@ -314,6 +316,15 @@ export default function Gado() {
   };
 
   const handleSubmitLogic = async () => {
+    // Calcular valor baseado no peso se fornecido (@ = R$ 347.000,00)
+    // 1 @ = 15 kg, então: valor = (peso_kg / 15) * 347000
+    let calculatedPrice = formData.purchase_price ? parseFloat(formData.purchase_price) : null;
+    if (formData.weight && parseFloat(formData.weight) > 0) {
+      const weightKg = parseFloat(formData.weight);
+      const arrobas = weightKg / 15; // 1 @ = 15 kg
+      calculatedPrice = arrobas * 347000;
+    }
+    
     const data = {
       description: formData.description ? standardizeText(formData.description) : null,
       category: formData.category ? standardizeText(formData.category) : null,
@@ -322,7 +333,8 @@ export default function Gado() {
       health_status: formData.health_status ? standardizeText(formData.health_status) : null,
       quantity: formData.quantity ? parseInt(formData.quantity) : 1,
       age_months: formData.age_months ? parseInt(formData.age_months) : null,
-      purchase_price: formData.purchase_price ? parseFloat(formData.purchase_price) : null,
+      weight: formData.weight ? parseFloat(formData.weight) : null,
+      purchase_price: calculatedPrice,
       purchase_date: formData.purchase_date || null,
     };
 
@@ -345,6 +357,7 @@ export default function Gado() {
       location: item.location || "",
       purchase_price: item.purchase_price?.toString() || "",
       purchase_date: item.purchase_date || "",
+      weight: item.weight?.toString() || "",
     });
     setIsDialogOpen(true);
   };
@@ -362,6 +375,7 @@ export default function Gado() {
       location: "",
       purchase_price: "",
       purchase_date: "",
+      weight: "",
     });
   };
 
@@ -377,6 +391,7 @@ export default function Gado() {
       location: "",
       purchase_price: "",
       purchase_date: "",
+      weight: "",
     });
     setIsDialogOpen(true);
   };
@@ -557,6 +572,7 @@ export default function Gado() {
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Origem</TableHead>
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Quantidade</TableHead>
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Idade (meses)</TableHead>
+              <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Peso (kg/@)</TableHead>
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Saúde</TableHead>
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Localização</TableHead>
               <TableHead className="bg-gradient-to-r from-primary/10 to-primary/5 backdrop-blur-sm font-bold border-r border-border/50 px-1.5 sm:px-2 text-xs text-center">Data Compra</TableHead>
@@ -578,7 +594,7 @@ export default function Gado() {
               </TableRow>
             ) : sortedCattle?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-12 text-muted-foreground/70 border-0">
+                <TableCell colSpan={11} className="text-center py-12 text-muted-foreground/70 border-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-16 h-16 rounded-full bg-muted/30 border-2 border-border/50 flex items-center justify-center">
                       <span className="text-2xl">🐄</span>
@@ -602,6 +618,9 @@ export default function Gado() {
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.origin || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.quantity || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.age_months || "-"}</TableCell>
+                  <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">
+                    {item.weight ? `${item.weight} kg (${(parseFloat(item.weight) / 15).toFixed(2)} @)` : "-"}
+                  </TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.health_status || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] truncate text-center">{item.location || "-"}</TableCell>
                   <TableCell className="font-medium text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</TableCell>
@@ -673,6 +692,7 @@ export default function Gado() {
                         <div><b>Origem:</b> {item.origin || "-"}</div>
                         <div><b>Quantidade:</b> {item.quantity || "-"}</div>
                         <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                        <div><b>Peso:</b> {item.weight ? `${item.weight} kg (${(parseFloat(item.weight) / 15).toFixed(2)} @)` : "-"}</div>
                         <div><b>Saúde:</b> {item.health_status || "-"}</div>
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
@@ -697,6 +717,7 @@ export default function Gado() {
                         <div><b>Origem:</b> {item.origin || "-"}</div>
                         <div><b>Quantidade:</b> {item.quantity || "-"}</div>
                         <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                        <div><b>Peso:</b> {item.weight ? `${item.weight} kg (${(parseFloat(item.weight) / 15).toFixed(2)} @)` : "-"}</div>
                         <div><b>Saúde:</b> {item.health_status || "-"}</div>
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
@@ -721,6 +742,7 @@ export default function Gado() {
                         <div><b>Origem:</b> {item.origin || "-"}</div>
                         <div><b>Quantidade:</b> {item.quantity || "-"}</div>
                         <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                        <div><b>Peso:</b> {item.weight ? `${item.weight} kg (${(parseFloat(item.weight) / 15).toFixed(2)} @)` : "-"}</div>
                         <div><b>Saúde:</b> {item.health_status || "-"}</div>
                         <div><b>Localização:</b> {item.location || "-"}</div>
                         <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
@@ -742,6 +764,7 @@ export default function Gado() {
                 <div><b>Origem:</b> {item.origin || "-"}</div>
                 <div><b>Quantidade:</b> {item.quantity || "-"}</div>
                 <div><b>Idade (meses):</b> {item.age_months || "-"}</div>
+                <div><b>Peso:</b> {item.weight ? `${item.weight} kg (${(parseFloat(item.weight) / 15).toFixed(2)} @)` : "-"}</div>
                 <div><b>Saúde:</b> {item.health_status || "-"}</div>
                 <div><b>Localização:</b> {item.location || "-"}</div>
                 <div><b>Data Compra:</b> {item.purchase_date ? format(new Date(item.purchase_date), "dd/MM/yyyy") : "-"}</div>
@@ -863,14 +886,48 @@ export default function Gado() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="purchase_price">Preço de Compra</Label>
+                <Label htmlFor="weight">Peso (kg)</Label>
+                <Input
+                  id="weight"
+                  type="number"
+                  step="0.01"
+                  value={formData.weight}
+                  onChange={(e) => {
+                    const weight = e.target.value;
+                    // Calcular valor automaticamente: @ = R$ 347.000,00 (1 @ = 15 kg)
+                    if (weight && parseFloat(weight) > 0) {
+                      const weightKg = parseFloat(weight);
+                      const arrobas = weightKg / 15;
+                      const calculatedPrice = arrobas * 347000;
+                      setFormData({ ...formData, weight, purchase_price: calculatedPrice.toFixed(2) });
+                    } else {
+                      setFormData({ ...formData, weight });
+                    }
+                  }}
+                  placeholder="Ex: 450 (kg)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  O valor será calculado automaticamente: 1 @ = 15 kg = R$ 347.000,00
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="purchase_price">Preço de Compra (R$)</Label>
                 <Input
                   id="purchase_price"
                   type="number"
                   step="0.01"
                   value={formData.purchase_price}
                   onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
+                  placeholder="Preenchido automaticamente pelo peso"
                 />
+                <p className="text-xs text-muted-foreground">
+                  {formData.weight && parseFloat(formData.weight) > 0 
+                    ? `Calculado: ${(parseFloat(formData.weight) / 15).toFixed(2)} @ × R$ 347.000,00`
+                    : "Ou informe manualmente"}
+                </p>
               </div>
             </div>
 
