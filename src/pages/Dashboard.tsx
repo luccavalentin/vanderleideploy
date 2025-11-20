@@ -2245,7 +2245,7 @@ export default function Dashboard() {
                     }}
                     formatter={(value: any) => formatCurrency(value)}
                     labelStyle={{ fontWeight: 'bold', marginBottom: '6px', color: 'hsl(var(--foreground))' }}
-                    cursor={{ fill: 'hsl(var(--destructive) / 0.1)' }}
+                    cursor={{ fill: 'hsl(var(--primary) / 0.1)' }}
                   />
                   <Bar 
                     dataKey="amount" 
@@ -2287,7 +2287,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0 ml-4">
-                      <p className="font-bold text-base sm:text-lg text-destructive">
+                      <p className="font-bold text-base sm:text-lg text-primary">
                         {formatCurrency(item.amount)}
                       </p>
                     </div>
@@ -2299,7 +2299,7 @@ export default function Dashboard() {
               <div className="mt-4 pt-4 border-t border-border">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-base sm:text-lg text-foreground">Total</span>
-                  <span className="font-bold text-lg sm:text-xl text-destructive">
+                  <span className="font-bold text-lg sm:text-xl text-primary">
                     {formatCurrency(total)}
                   </span>
                 </div>
