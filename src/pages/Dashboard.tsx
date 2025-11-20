@@ -2301,50 +2301,37 @@ export default function Dashboard() {
         <CardContent className="px-3 sm:px-4 md:px-6 pb-4 sm:pb-6">
           <div ref={chartRef} className="w-full">
             {/* Gráfico de Barras Horizontal */}
-            <div className="mb-4 sm:mb-6">
-              <ResponsiveContainer width="100%" height={Math.max(250, (data.length * 50) + 80)}>
+            <div className="mb-6">
+              <ResponsiveContainer width="100%" height={Math.max(300, (data.length * 60) + 100)}>
                 <BarChart
                   data={sortedData}
                   layout="vertical"
                   margin={{ 
-                    top: 5, 
-                    right: 5, 
-                    left: 80, 
-                    bottom: 5 
+                    top: 10, 
+                    right: window.innerWidth < 640 ? 10 : 30, 
+                    left: window.innerWidth < 640 ? 70 : 100, 
+                    bottom: 10 
                   }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
                   <XAxis 
                     type="number" 
-                    tickFormatter={(value) => {
-                      const formatted = formatCurrency(value);
-                      // Reduzir tamanho da formatação para mobile
-                      if (window.innerWidth < 640) {
-                        return formatted.replace('R$', '').trim();
-                      }
-                      return formatted;
-                    }}
+                    tickFormatter={(value) => formatCurrency(value)}
                     stroke="hsl(var(--muted-foreground))"
-                    fontSize={9}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
+                    fontSize={window.innerWidth < 640 ? 10 : 12}
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
                   />
                   <YAxis 
                     type="category" 
                     dataKey="category" 
-                    width={75}
-                    tick={{ fill: 'hsl(var(--foreground))', fontSize: 9 }}
+                    width={window.innerWidth < 640 ? 65 : 90}
+                    tick={{ fill: 'hsl(var(--foreground))', fontSize: window.innerWidth < 640 ? 10 : 12 }}
                     stroke="hsl(var(--muted-foreground))"
                     tickFormatter={(value) => {
-                      if (!value) return "Sem categoria";
-                      // Para mobile, truncar mais agressivamente
-                      if (window.innerWidth < 640) {
-                        if (value.length > 15) {
-                          return value.substring(0, 13) + '...';
-                        }
-                      } else if (value.length > 20) {
-                        return value.substring(0, 18) + '...';
+                      if (window.innerWidth < 640 && value && value.length > 12) {
+                        return value.substring(0, 10) + '...';
                       }
-                      return value;
+                      return value || "Sem categoria";
                     }}
                   />
                   <Tooltip
@@ -2352,18 +2339,11 @@ export default function Dashboard() {
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '0.5rem',
-                      padding: window.innerWidth < 640 ? '8px 10px' : '10px 14px',
+                      padding: '10px 14px',
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                      fontSize: window.innerWidth < 640 ? '11px' : '13px',
                     }}
                     formatter={(value: any) => formatCurrency(value)}
-                    labelFormatter={(label) => label || "Sem categoria"}
-                    labelStyle={{ 
-                      fontWeight: 'bold', 
-                      marginBottom: '4px', 
-                      color: 'hsl(var(--foreground))',
-                      fontSize: window.innerWidth < 640 ? '11px' : '13px',
-                    }}
+                    labelStyle={{ fontWeight: 'bold', marginBottom: '6px', color: 'hsl(var(--foreground))' }}
                     cursor={{ fill: 'hsl(var(--primary) / 0.1)' }}
                   />
                   <Bar 
