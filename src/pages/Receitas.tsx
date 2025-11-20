@@ -221,12 +221,6 @@ export default function Receitas() {
     },
   });
 
-  const handleSubmitAndNew = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setKeepDialogOpen(true);
-    await handleSubmitLogic();
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setKeepDialogOpen(false);
@@ -1008,10 +1002,6 @@ export default function Receitas() {
               <Button type="button" variant="outline" onClick={handleCloseDialog}>
                 Cancelar
               </Button>
-              {!editingId && (
-                <Button type="button" variant="outline" onClick={handleSubmitAndNew}>
-                </Button>
-              )}
               <Button type="submit">
                 {editingId ? "Atualizar" : "Cadastrar"}
               </Button>
