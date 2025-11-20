@@ -143,6 +143,8 @@ export default function Despesas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses-by-category"] });
+      await queryClient.invalidateQueries({ queryKey: ["monthly-analysis"] });
       toast({ title: "Despesa cadastrada com sucesso!" });
       if (keepDialogOpen) {
         // Limpar formulário mas manter dialog aberto
@@ -179,6 +181,8 @@ export default function Despesas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses-by-category"] });
+      await queryClient.invalidateQueries({ queryKey: ["monthly-analysis"] });
       toast({ title: "Despesa atualizada com sucesso!" });
       handleCloseDialog();
     },
@@ -198,6 +202,8 @@ export default function Despesas() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses-by-category"] });
+      await queryClient.invalidateQueries({ queryKey: ["monthly-analysis"] });
       toast({ title: "Despesa excluída com sucesso!" });
     },
     onError: (error: any) => {
