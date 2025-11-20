@@ -125,7 +125,10 @@ export default function Gado() {
       return {
         totalWeightKg: 0,
         totalWeightArroba: 0,
-        totalValue: 0
+        totalValue: 0,
+        totalSaleValue: 0,
+        totalCost: 0,
+        totalProfit: 0
       };
     }
 
@@ -138,13 +141,25 @@ export default function Gado() {
     // Converte para arroba (1 @ = 15 kg)
     const totalWeightArroba = totalWeightKg / 15;
 
-    // Calcula o valor total (arroba * preço da arroba)
-    const totalValue = totalWeightArroba * arrobaPrice;
+    // Calcula o valor de venda total (arroba * preço da arroba)
+    const totalSaleValue = totalWeightArroba * arrobaPrice;
+
+    // Soma o custo total de compra
+    const totalCost = cattle.reduce((sum: number, c: any) => {
+      const cost = parseFloat(c.purchase_price || 0);
+      return sum + cost;
+    }, 0);
+
+    // Calcula o lucro total (valor de venda - custo de compra)
+    const totalProfit = totalSaleValue - totalCost;
 
     return {
       totalWeightKg,
       totalWeightArroba,
-      totalValue
+      totalValue: totalProfit, // Valor Total agora é o lucro
+      totalSaleValue, // Valor de venda (para referência)
+      totalCost, // Custo total (para referência)
+      totalProfit // Lucro total
     };
   }, [cattle, arrobaPrice]);
 
@@ -503,9 +518,9 @@ export default function Gado() {
                 </div>
                 <div className="bg-card/50 rounded-lg p-3 sm:p-4 border border-border/50 hover:border-success/30 transition-colors">
                   <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Valor Total (R$)
+                    Lucro Total (R$)
                   </p>
-                  <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold text-success break-words leading-tight" style={{ 
+                  <p className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold break-words leading-tight ${weightCalculator.totalValue >= 0 ? 'text-success' : 'text-destructive'}`} style={{ 
                     wordBreak: 'break-word', 
                     overflowWrap: 'break-word',
                     lineHeight: '1.2'
@@ -513,7 +528,7 @@ export default function Gado() {
                     {formatCurrency(weightCalculator.totalValue)}
                   </p>
                   <p className="text-[10px] sm:text-xs text-muted-foreground mt-2 pt-2 border-t border-border/30">
-                    @ a {formatCurrency(arrobaPrice)}
+                    Venda: {formatCurrency(weightCalculator.totalSaleValue)} | Custo: {formatCurrency(weightCalculator.totalCost)}
                   </p>
                 </div>
               </div>
