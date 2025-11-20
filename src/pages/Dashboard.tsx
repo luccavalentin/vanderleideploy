@@ -2164,7 +2164,15 @@ export default function Dashboard() {
                   <div
                     key={index}
                     onClick={() => onCategoryClick && onCategoryClick(categoryName)}
-                    className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors border border-border/50 cursor-pointer"
+                    className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-muted/30 hover:bg-muted/50 active:bg-muted/60 transition-colors border border-border/50 cursor-pointer touch-manipulation"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onCategoryClick && onCategoryClick(categoryName);
+                      }
+                    }}
                   >
                     <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                       <div
@@ -2172,16 +2180,16 @@ export default function Dashboard() {
                         style={{ backgroundColor: COLORS[colorIndex % COLORS.length] }}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-xs sm:text-sm md:text-base text-foreground break-words">
+                        <p className="font-semibold text-[11px] sm:text-xs md:text-sm text-foreground break-words leading-tight">
                           {categoryName}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
                           {percent}% do total
                         </p>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0 ml-2 sm:ml-4">
-                      <p className="font-bold text-xs sm:text-sm md:text-base lg:text-lg text-primary">
+                      <p className="font-bold text-[10px] sm:text-xs md:text-sm text-primary leading-tight">
                         {formatCurrency(item.amount)}
                       </p>
                     </div>
