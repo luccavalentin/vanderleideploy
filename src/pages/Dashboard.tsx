@@ -2153,7 +2153,7 @@ export default function Dashboard() {
     );
   };
 
-  // Componente auxiliar para gráfico de Despesas por Categoria
+  // Componente auxiliar para gráfico de Despesas por Categoria - EXATAMENTE IGUAL AO DE RECEITAS
   const ExpenseCategoryChart = ({ data, title, subtitle, chartRef }: { 
     data: any[] | undefined, 
     title: string, 
@@ -2165,7 +2165,7 @@ export default function Dashboard() {
         <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
           <CardHeader className="pb-4 px-4 sm:px-6">
             <CardTitle className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-destructive" />
+              <BarChart3 className="w-5 h-5 text-primary" />
               <span>{title}</span>
             </CardTitle>
             {subtitle && (
@@ -2192,7 +2192,7 @@ export default function Dashboard() {
       <Card className="border-0 shadow-elegant dashboard-card transition-all duration-300 hover:shadow-xl">
         <CardHeader className="pb-4 px-4 sm:px-6">
           <CardTitle className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-destructive" />
+            <BarChart3 className="w-5 h-5 text-primary" />
             <span>{title}</span>
           </CardTitle>
           {subtitle && (
