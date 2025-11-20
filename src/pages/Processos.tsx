@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatsCard } from "@/components/layout/StatsCard";
 import { ScrollAwareContainer } from "@/components/layout/ScrollAwareContainer";
-import { QuickActions } from "@/components/QuickActions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -20,7 +19,8 @@ import { useSmartSearch } from "@/hooks/useSmartSearch";
 import { SmartSearchInput } from "@/components/SmartSearchInput";
 import { ClientSearchInput } from "@/components/ClientSearchInput";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2, Scale, Download, FileText, TrendingUp, Calendar, CheckCircle2, XCircle, DollarSign, Plus } from "lucide-react";
+import { Pencil, Trash2, Scale, Download, FileText, TrendingUp, Calendar, CheckCircle2, XCircle, DollarSign, Plus, TrendingDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format, addMonths } from "date-fns";
@@ -41,6 +41,7 @@ type CreateProcessInput = {
 };
 
 export default function Processos() {
+  const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -674,7 +675,52 @@ export default function Processos() {
         }}
       />
 
-      <QuickActions />
+      {/* Botões de Receitas e Despesas do Escritório */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <Card className="border-2 border-destructive/30 hover:border-destructive/50 transition-colors cursor-pointer hover:shadow-lg">
+          <CardContent className="p-6">
+            <Button
+              variant="ghost"
+              className="w-full h-auto p-0 flex flex-col items-start gap-3 hover:bg-transparent"
+              onClick={() => navigate("/despesas?novo=1&categoria=Escritório&linked_source=Escritório")}
+            >
+              <div className="flex items-center gap-3 w-full">
+                <div className="p-3 rounded-lg bg-destructive/10">
+                  <TrendingDown className="h-6 w-6 text-destructive" />
+                </div>
+                <div className="flex-1 text-left">
+                  <h3 className="font-bold text-lg text-foreground">Despesas do Escritório</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Cadastrar nova despesa relacionada ao escritório
+                  </p>
+                </div>
+              </div>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-success/30 hover:border-success/50 transition-colors cursor-pointer hover:shadow-lg">
+          <CardContent className="p-6">
+            <Button
+              variant="ghost"
+              className="w-full h-auto p-0 flex flex-col items-start gap-3 hover:bg-transparent"
+              onClick={() => navigate("/receitas?novo=1&categoria=Escritório&linked_source=Escritório")}
+            >
+              <div className="flex items-center gap-3 w-full">
+                <div className="p-3 rounded-lg bg-success/10">
+                  <TrendingUp className="h-6 w-6 text-success" />
+                </div>
+                <div className="flex-1 text-left">
+                  <h3 className="font-bold text-lg text-foreground">Receitas do Escritório</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Cadastrar nova receita relacionada ao escritório
+                  </p>
+                </div>
+              </div>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

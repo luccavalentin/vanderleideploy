@@ -132,10 +132,12 @@ export default function Gado() {
       };
     }
 
-    // Soma o peso total: weight já é o peso total do lote, não precisa multiplicar por quantity
+    // Soma o peso total: peso por animal * quantidade de animais
     const totalWeightKg = cattle.reduce((sum: number, c: any) => {
       const weight = parseFloat(c.weight || 0);
-      return sum + weight;
+      const quantity = parseInt(c.quantity || 1);
+      // Multiplica o peso pela quantidade de animais
+      return sum + (weight * quantity);
     }, 0);
 
     // Converte para arroba (1 @ = 15 kg)

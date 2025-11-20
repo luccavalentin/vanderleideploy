@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useTableSort } from "@/hooks/useTableSort";
 import { useSmartSearch } from "@/hooks/useSmartSearch";
@@ -40,7 +41,7 @@ export default function Receitas() {
   const categoriaFilter = searchParams.get("categoria") || "";
   const buscaFilter = searchParams.get("busca") || "";
   const novoParam = searchParams.get("novo") || "";
-  const linkedToParam = searchParams.get("linked_to") || "";
+  const linkedSourceParam = searchParams.get("linked_source") || "";
 
   const [formData, setFormData] = useState({
     description: "",
@@ -52,7 +53,7 @@ export default function Receitas() {
     frequency_type: "", // "tempo_determinado" ou vazio
     installments: "", // Quantidade de parcelas
     documentation_status: "PENDENTE",
-    linked_to: "", // Origem/tela de onde foi cadastrado
+    linked_source: "", // Vínculo com outras telas (Escritório, Gado, etc)
   });
 
   const { data: revenues } = useQuery({
@@ -93,15 +94,15 @@ export default function Receitas() {
         frequency_type: "",
         installments: "",
         documentation_status: "PENDENTE",
-        linked_to: linkedToParam || "", // Pré-preenche linked_to se especificado
+        linked_source: linkedSourceParam || "", // Pré-preenche linked_source se especificado
       });
       setIsDialogOpen(true);
-      // Remove apenas o parâmetro "novo" da URL, mantendo "categoria" e "linked_to" se existirem
+      // Remove apenas o parâmetro "novo" da URL, mantendo "categoria" e "linked_source" se existirem
       const newSearchParams = new URLSearchParams(searchParams);
       newSearchParams.delete("novo");
       setSearchParams(newSearchParams, { replace: true });
     }
-  }, [novoParam, categoriaFilter, linkedToParam, searchParams, setSearchParams]);
+  }, [novoParam, categoriaFilter, linkedSourceParam, searchParams, setSearchParams]);
 
   // Aplicar filtro adicional por categoria se especificado na URL
   const finalFilteredRevenues = useMemo(() => {
@@ -162,6 +163,7 @@ export default function Receitas() {
         // Limpar formulário mas manter dialog aberto
         // Manter categoria se vier da URL (ex: quando vem da tela de Gado)
         const categoryFromUrl = categoriaFilter || "";
+        const linkedSourceFromUrl = linkedSourceParam || "";
         setFormData({
           description: "",
           amount: "",
@@ -172,7 +174,7 @@ export default function Receitas() {
           frequency_type: "",
           installments: "",
           documentation_status: "PENDENTE",
-          linked_to: linkedToParam || "", // Mantém linked_to se existir
+          linked_source: linkedSourceFromUrl, // Mantém linked_source da URL se existir
         });
         setKeepDialogOpen(false);
       } else {
@@ -292,7 +294,7 @@ export default function Receitas() {
           ? parseInt(formData.installments) 
           : null,
         documentation_status: formData.documentation_status || "PENDENTE",
-        linked_to: formData.linked_to ? standardizeText(formData.linked_to) : null,
+        linked_source: formData.linked_source ? standardizeText(formData.linked_source) : null,
       };
 
       // Remove campos undefined ou string vazia
@@ -333,7 +335,7 @@ export default function Receitas() {
           frequency_type: "fixo",
           installments: "",
           documentation_status: revenue.documentation_status || "PENDENTE",
-          linked_to: revenue.linked_to || "",
+          linked_source: revenue.linked_source || "",
         });
       } else if (frequency.includes("Anual")) {
         setFormData({
@@ -346,7 +348,7 @@ export default function Receitas() {
           frequency_type: "fixo",
           installments: "",
           documentation_status: revenue.documentation_status || "PENDENTE",
-          linked_to: revenue.linked_to || "",
+          linked_source: revenue.linked_source || "",
         });
       }
     } else if (frequency.includes("Tempo Determinado")) {
@@ -363,7 +365,7 @@ export default function Receitas() {
           frequency_type: "tempo_determinado",
           installments: installments,
           documentation_status: revenue.documentation_status || "PENDENTE",
-          linked_to: revenue.linked_to || "",
+          linked_source: revenue.linked_source || "",
         });
       } else if (frequency.includes("Anual")) {
         setFormData({
@@ -376,7 +378,7 @@ export default function Receitas() {
           frequency_type: "tempo_determinado",
           installments: installments,
           documentation_status: revenue.documentation_status || "PENDENTE",
-          linked_to: revenue.linked_to || "",
+          linked_source: revenue.linked_source || "",
         });
       }
     } else {
@@ -390,7 +392,7 @@ export default function Receitas() {
         frequency_type: "",
         installments: "",
         documentation_status: revenue.documentation_status || "PENDENTE",
-        linked_to: revenue.linked_to || "",
+        linked_source: revenue.linked_source || "",
       });
     }
     setIsDialogOpen(true);
@@ -399,21 +401,22 @@ export default function Receitas() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingId(null);
-    // Manter categoria se vier da URL (ex: quando vem da tela de Gado)
+    // Manter categoria e linked_source se vierem da URL (ex: quando vem da tela de Gado ou Escritório)
     const categoryFromUrl = categoriaFilter || "";
-      setFormData({
-        description: "",
-        amount: "",
-        date: "",
-        classification: "",
-        category: categoryFromUrl, // Mantém categoria da URL se existir
-        frequency: "",
-        frequency_type: "",
-        installments: "",
-        documentation_status: "PENDENTE",
-        linked_to: linkedToParam || "", // Mantém linked_to se existir
-      });
-    };
+    const linkedSourceFromUrl = linkedSourceParam || "";
+    setFormData({
+      description: "",
+      amount: "",
+      date: "",
+      classification: "",
+      category: categoryFromUrl, // Mantém categoria da URL se existir
+      frequency: "",
+      frequency_type: "",
+      installments: "",
+      documentation_status: "PENDENTE",
+      linked_source: linkedSourceFromUrl, // Mantém linked_source da URL se existir
+    });
+  };
 
   const handleNewItem = () => {
     setEditingId(null);
@@ -450,7 +453,7 @@ export default function Receitas() {
           frequency_type: "fixo",
           installments: "",
           documentation_status: revenue.documentation_status || "PENDENTE",
-          linked_to: revenue.linked_to || "",
+          linked_source: revenue.linked_source || "",
         });
       } else if (frequency.includes("Anual")) {
         setFormData({
@@ -788,7 +791,16 @@ export default function Receitas() {
                   onDoubleClick={() => handleEdit(revenue)}
                 >
                   <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs whitespace-nowrap text-center">{format(new Date(revenue.date), "dd/MM/yyyy")}</TableCell>
-                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] truncate text-center">{revenue.description}</TableCell>
+                  <TableCell className="font-semibold text-foreground border-r border-border/30 px-1.5 sm:px-2 text-xs max-w-[120px] text-center">
+                    <div className="flex items-center justify-center gap-1 flex-wrap">
+                      <span className="truncate">{revenue.description}</span>
+                      {revenue.linked_source && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/30">
+                          🎯 {revenue.linked_source}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="border-r border-border/30 px-1.5 sm:px-2 text-xs text-center">
                     {revenue.classification ? (
                       <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary whitespace-nowrap">
